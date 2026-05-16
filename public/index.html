@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flappy Stag</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Username modal -->
+  <div id="username-modal" class="modal">
+    <div class="modal-box">
+      <h2>Welcome to Flappy Stag!</h2>
+      <p>Enter your name to track your score on the leaderboard:</p>
+      <input type="text" id="username-input" placeholder="Your name" maxlength="20" autocomplete="off">
+      <button id="username-btn">Let's Go!</button>
+    </div>
+  </div>
+
+  <!-- Leaderboard panel -->
+  <div id="leaderboard-panel" class="panel hidden">
+    <h3>Leaderboard</h3>
+    <ol id="leaderboard-list"></ol>
+    <button id="close-leaderboard">Play Again</button>
+  </div>
+
+  <div id="ui">
+    <span id="player-name"></span>
+    <button id="show-leaderboard-btn">Leaderboard</button>
+  </div>
+
+  <canvas id="game-canvas"></canvas>
+
+  <div id="start-screen">
+    <h1>Flappy Stag</h1>
+    <p>Press <strong>Space</strong> or <strong>Tap</strong> to flap</p>
+    <p id="best-score-display"></p>
+  </div>
+
+  <div id="game-over-screen" class="hidden">
+    <h2>Game Over</h2>
+    <p>Score: <span id="final-score">0</span></p>
+    <p id="rank-display"></p>
+    <button id="restart-btn">Play Again</button>
+    <button id="leaderboard-btn">Leaderboard</button>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
