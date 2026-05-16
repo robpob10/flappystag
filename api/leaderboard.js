@@ -13,7 +13,11 @@ module.exports = async function handler(req, res) {
     // flat array: [member, score, member, score, ...]
     const entries = [];
     for (let i = 0; i < raw.length; i += 2) {
-      entries.push({ username: raw[i], score: Number(raw[i + 1]) });
+      const username = raw[i];
+      const score = Number(raw[i + 1]);
+      if (username && username !== 'undefined' && isFinite(score)) {
+        entries.push({ username, score });
+      }
     }
     res.json(entries);
   } catch (err) {
