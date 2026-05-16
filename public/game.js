@@ -9,14 +9,14 @@ const CFG = {
   pipeSpeed: 2.8,
   pipeSpawnInterval: 90,  // frames
   groundHeight: 80,
-  birdW: 48,
-  birdH: 48,
+  birdW: 64,
+  birdH: 64,
 };
 
 // ── Asset paths (swap these to change sprites) ────────────────────────────────
 const ASSETS = {
-  birdUp:   'assets/bird.png',   // used when going up (or flapping)
-  birdDown: 'assets/bird.png',   // swap later for a different image
+  birdUp:   'assets/bird_up.png',
+  birdDown: 'assets/bird_down.png',
   pipe:     null,                // null = draw with canvas (swap later)
 };
 
@@ -34,11 +34,15 @@ canvas.width  = CFG.width;
 canvas.height = CFG.height;
 
 // ── Image loading ─────────────────────────────────────────────────────────────
-const imgBird = new Image();
-let birdImageLoaded = false;
-imgBird.onload  = () => { birdImageLoaded = true; };
-imgBird.onerror = () => { birdImageLoaded = false; };
-imgBird.src = ASSETS.birdUp;
+const imgBirdUp   = new Image();
+const imgBirdDown = new Image();
+let birdUpLoaded = false, birdDownLoaded = false;
+imgBirdUp.onload    = () => { birdUpLoaded   = true; };
+imgBirdUp.onerror   = () => { birdUpLoaded   = false; };
+imgBirdDown.onload  = () => { birdDownLoaded = true; };
+imgBirdDown.onerror = () => { birdDownLoaded = false; };
+imgBirdUp.src   = ASSETS.birdUp;
+imgBirdDown.src = ASSETS.birdDown;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const usernameModal    = document.getElementById('username-modal');
@@ -240,8 +244,10 @@ function drawBird() {
   const tilt = Math.min(Math.max(bird.vy * 3, -30), 70);
   ctx.rotate((tilt * Math.PI) / 180);
 
-  if (birdImageLoaded) {
-    ctx.drawImage(imgBird, -CFG.birdW / 2, -CFG.birdH / 2, CFG.birdW, CFG.birdH);
+  const goingUp = bird.vy < 0;
+  const sprite  = goingUp ? (birdUpLoaded ? imgBirdUp : null) : (birdDownLoaded ? imgBirdDown : null);
+  if (sprite) {
+    ctx.drawImage(sprite, -CFG.birdW / 2, -CFG.birdH / 2, CFG.birdW, CFG.birdH);
   } else {
     // fallback: yellow circle bird
     ctx.beginPath();
