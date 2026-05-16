@@ -10,8 +10,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const raw = await redis.zrange('leaderboard', 0, 19, { rev: true, withScores: true });
-    // @upstash/redis returns [{member, score}, ...] with withScores
-    const entries = raw.map(e => ({ username: e.member, score: e.score }));
+    // flat array: [member, score, member, score, ...]
+    const entries = [];
+    for (let i = 0; i < raw.length; i += 2) {
+      entries.push({ username: raw[i], score: Number(raw[i + 1]) });
+    }
     res.json(entries);
   } catch (err) {
     console.error(err);
