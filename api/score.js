@@ -1,4 +1,9 @@
-const { kv } = require('@vercel/kv');
+const { Redis } = require('@upstash/redis');
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -9,13 +14,12 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Only store if it's a personal best
-    const current = await kv.zscore('leaderboard', username);
+    const current = await redis.zscore('leaderboard', username);
     if (current === null || score > current) {
-      await kv.zadd('leaderboard', { score, member: username });
+      await redis.zadd('leaderboard', { score, member: username });
     }
 
-    const rank = await kv.zrevrank('leaderboard', username);
+    const rank = await redis.zrevrank('leaderboard', username);
     res.json({ rank: rank + 1 });
   } catch (err) {
     console.error(err);
