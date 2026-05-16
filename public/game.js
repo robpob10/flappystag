@@ -134,11 +134,21 @@ closeLeaderboard.addEventListener('click', () => {
 showLbBtn.addEventListener('click', showLeaderboard);
 
 // ── Pipe logic ────────────────────────────────────────────────────────────────
+function pipeWidth(sectionH) {
+  if (pipeLoaded && imgPipe.naturalHeight > 0) {
+    return Math.max(Math.round(sectionH * imgPipe.naturalWidth / imgPipe.naturalHeight), 20);
+  }
+  return CFG.pipeWidth;
+}
+
 function spawnPipe() {
   const minY = 60;
   const maxY = CFG.height - CFG.groundHeight - CFG.pipeGap - 60;
   const topH = Math.random() * (maxY - minY) + minY;
-  pipes.push({ x: CFG.width, topH, scored: false });
+  const botH = CFG.height - CFG.groundHeight - CFG.pipeGap - topH;
+  // use the narrower of the two sections for collision fairness
+  const w = Math.min(pipeWidth(topH), pipeWidth(botH));
+  pipes.push({ x: CFG.width, topH, w, scored: false });
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
@@ -153,9 +163,8 @@ function checkCollision() {
   if (bird.y <= 0) return true;
 
   for (const p of pipes) {
-    const px = p.x;
-    const pw = CFG.pipeWidth;
-    if (bx + bw > px && bx < px + pw) {
+    const pw = p.w || CFG.pipeWidth;
+    if (bx + bw > p.x && bx < p.x + pw) {
       if (by < p.topH || by + bh > p.topH + CFG.pipeGap) return true;
     }
   }
@@ -218,28 +227,31 @@ function drawGround() {
 function drawPipe(p) {
   const botY = p.topH + CFG.pipeGap;
   const botH = CFG.height - CFG.groundHeight - botY;
+  const w    = p.w || CFG.pipeWidth;
 
   if (pipeLoaded) {
-    // bottom pipe — normal orientation
-    ctx.drawImage(imgPipe, p.x, botY, CFG.pipeWidth, botH);
+    const topW = pipeWidth(p.topH);
+    const botW = pipeWidth(botH);
+
+    // bottom pipe — natural orientation
+    ctx.drawImage(imgPipe, p.x, botY, botW, botH);
 
     // top pipe — flip vertically
     ctx.save();
-    ctx.translate(p.x + CFG.pipeWidth / 2, p.topH / 2);
+    ctx.translate(p.x + topW / 2, p.topH / 2);
     ctx.scale(1, -1);
-    ctx.drawImage(imgPipe, -CFG.pipeWidth / 2, -p.topH / 2, CFG.pipeWidth, p.topH);
+    ctx.drawImage(imgPipe, -topW / 2, -p.topH / 2, topW, p.topH);
     ctx.restore();
   } else {
-    // canvas fallback
-    const green = '#4caf50', dark = '#388e3c', capH = 22, capX = 6;
-    ctx.fillStyle = green;
-    ctx.fillRect(p.x, 0, CFG.pipeWidth, p.topH);
-    ctx.fillStyle = dark;
-    ctx.fillRect(p.x - capX, p.topH - capH, CFG.pipeWidth + capX * 2, capH);
-    ctx.fillStyle = green;
-    ctx.fillRect(p.x, botY, CFG.pipeWidth, botH);
-    ctx.fillStyle = dark;
-    ctx.fillRect(p.x - capX, botY, CFG.pipeWidth + capX * 2, capH);
+    const capH = 22, capX = 6;
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(p.x, 0, w, p.topH);
+    ctx.fillStyle = '#388e3c';
+    ctx.fillRect(p.x - capX, p.topH - capH, w + capX * 2, capH);
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(p.x, botY, w, botH);
+    ctx.fillStyle = '#388e3c';
+    ctx.fillRect(p.x - capX, botY, w + capX * 2, capH);
   }
 }
 
@@ -315,7 +327,7 @@ function update() {
   // move pipes
   for (const p of pipes) {
     p.x -= CFG.pipeSpeed;
-    if (!p.scored && p.x + CFG.pipeWidth < bird.x) {
+    if (!p.scored && p.x + (p.w || CFG.pipeWidth) < bird.x) {
       p.scored = true;
       score++;
     }
