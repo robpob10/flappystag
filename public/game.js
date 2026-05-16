@@ -17,7 +17,7 @@ const CFG = {
 const ASSETS = {
   birdUp:   'assets/bird_up.png',
   birdDown: 'assets/bird_down.png',
-  pipe:     null,                // null = draw with canvas (swap later)
+  pipe:     'assets/pipe.png',
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -36,13 +36,17 @@ canvas.height = CFG.height;
 // ── Image loading ─────────────────────────────────────────────────────────────
 const imgBirdUp   = new Image();
 const imgBirdDown = new Image();
-let birdUpLoaded = false, birdDownLoaded = false;
+const imgPipe     = new Image();
+let birdUpLoaded = false, birdDownLoaded = false, pipeLoaded = false;
 imgBirdUp.onload    = () => { birdUpLoaded   = true; };
 imgBirdUp.onerror   = () => { birdUpLoaded   = false; };
 imgBirdDown.onload  = () => { birdDownLoaded = true; };
 imgBirdDown.onerror = () => { birdDownLoaded = false; };
+imgPipe.onload      = () => { pipeLoaded     = true; };
+imgPipe.onerror     = () => { pipeLoaded     = false; };
 imgBirdUp.src   = ASSETS.birdUp;
 imgBirdDown.src = ASSETS.birdDown;
+imgPipe.src     = ASSETS.pipe;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const usernameModal    = document.getElementById('username-modal');
@@ -212,26 +216,31 @@ function drawGround() {
 }
 
 function drawPipe(p) {
-  const green   = '#4caf50';
-  const dark    = '#388e3c';
-  const capH    = 22;
-  const capExtra = 6;
-
-  // top pipe body
-  ctx.fillStyle = green;
-  ctx.fillRect(p.x, 0, CFG.pipeWidth, p.topH);
-  // top pipe cap
-  ctx.fillStyle = dark;
-  ctx.fillRect(p.x - capExtra, p.topH - capH, CFG.pipeWidth + capExtra * 2, capH);
-
   const botY = p.topH + CFG.pipeGap;
   const botH = CFG.height - CFG.groundHeight - botY;
-  // bottom pipe body
-  ctx.fillStyle = green;
-  ctx.fillRect(p.x, botY, CFG.pipeWidth, botH);
-  // bottom pipe cap
-  ctx.fillStyle = dark;
-  ctx.fillRect(p.x - capExtra, botY, CFG.pipeWidth + capExtra * 2, capH);
+
+  if (pipeLoaded) {
+    // bottom pipe — normal orientation
+    ctx.drawImage(imgPipe, p.x, botY, CFG.pipeWidth, botH);
+
+    // top pipe — flip vertically
+    ctx.save();
+    ctx.translate(p.x + CFG.pipeWidth / 2, p.topH / 2);
+    ctx.scale(1, -1);
+    ctx.drawImage(imgPipe, -CFG.pipeWidth / 2, -p.topH / 2, CFG.pipeWidth, p.topH);
+    ctx.restore();
+  } else {
+    // canvas fallback
+    const green = '#4caf50', dark = '#388e3c', capH = 22, capX = 6;
+    ctx.fillStyle = green;
+    ctx.fillRect(p.x, 0, CFG.pipeWidth, p.topH);
+    ctx.fillStyle = dark;
+    ctx.fillRect(p.x - capX, p.topH - capH, CFG.pipeWidth + capX * 2, capH);
+    ctx.fillStyle = green;
+    ctx.fillRect(p.x, botY, CFG.pipeWidth, botH);
+    ctx.fillStyle = dark;
+    ctx.fillRect(p.x - capX, botY, CFG.pipeWidth + capX * 2, capH);
+  }
 }
 
 function drawBird() {
