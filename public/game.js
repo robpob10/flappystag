@@ -20,6 +20,26 @@ const ASSETS = {
   pipe:     'assets/pipe.png',
 };
 
+// ── Sound effects (swap these to change sounds) ───────────────────────────────
+const SOUNDS = {
+  flap: 'assets/flap.ogg',  // plays on each flap/click
+  die:  'assets/die.ogg',   // plays on death
+};
+
+// Preload one Audio element per sound; clone on play so rapid flaps can overlap.
+const audioFlap = new Audio(SOUNDS.flap);
+const audioDie  = new Audio(SOUNDS.die);
+audioFlap.preload = 'auto';
+audioDie.preload  = 'auto';
+
+function playSound(base) {
+  try {
+    const sfx = base.cloneNode();
+    sfx.currentTime = 0;
+    sfx.play().catch(() => {});  // ignore autoplay/interaction errors
+  } catch { /* audio unsupported — fail silently */ }
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let bestScore = parseInt(localStorage.getItem('flappy_best') || '0', 10);
@@ -114,6 +134,7 @@ function flap() {
   }
   if (gameState === 'playing') {
     bird.vy = CFG.flapForce;
+    playSound(audioFlap);
   }
   if (gameState === 'dead') return;
 }
@@ -342,6 +363,7 @@ function update() {
 async function die() {
   gameState = 'dead';
   cancelAnimationFrame(animFrame);
+  playSound(audioDie);
 
   if (score > bestScore) {
     bestScore = score;
