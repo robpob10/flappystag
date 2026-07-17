@@ -11,6 +11,7 @@ const CFG = {
   groundHeight: 80,
   birdW: 64,
   birdH: 64,
+  birdRadius: 28,  // circular hitbox radius (sprite stays square)
 };
 
 // ── Asset paths (swap these to change sprites) ────────────────────────────────
@@ -266,21 +267,32 @@ function spawnPipe() {
 }
 
 // ── Collision ─────────────────────────────────────────────────────────────────
+// Circle vs axis-aligned rectangle: true when the rectangle's closest point to
+// the circle centre lies within the radius.
+function circleHitsRect(cx, cy, r, rx, ry, rw, rh) {
+  const nx = Math.max(rx, Math.min(cx, rx + rw));
+  const ny = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - nx;
+  const dy = cy - ny;
+  return dx * dx + dy * dy < r * r;
+}
+
 function checkCollision() {
-  const bx = bird.x + 4;
-  const by = bird.y + 4;
-  const bw = CFG.birdW - 8;
-  const bh = CFG.birdH - 8;
+  const cx = bird.x + CFG.birdW / 2;   // circle centre
+  const cy = bird.y + CFG.birdH / 2;
+  const r  = CFG.birdRadius;
+  const groundTop = CFG.height - CFG.groundHeight;
 
   // ground / ceiling
-  if (bird.y + CFG.birdH >= CFG.height - CFG.groundHeight) return true;
-  if (bird.y <= 0) return true;
+  if (cy + r >= groundTop) return true;
+  if (cy - r <= 0) return true;
 
   for (const p of pipes) {
     const pw = p.w || CFG.pipeWidth;
-    if (bx + bw > p.x && bx < p.x + pw) {
-      if (by < p.topH || by + bh > p.topH + CFG.pipeGap) return true;
-    }
+    const gapBottom = p.topH + CFG.pipeGap;
+    // top pipe (0 → topH) and bottom pipe (gapBottom → ground)
+    if (circleHitsRect(cx, cy, r, p.x, 0, pw, p.topH)) return true;
+    if (circleHitsRect(cx, cy, r, p.x, gapBottom, pw, groundTop - gapBottom)) return true;
   }
   return false;
 }
