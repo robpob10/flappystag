@@ -306,11 +306,26 @@ async function submitScore(s) {
       body: JSON.stringify({ username, score: s }),
     });
     const data = await res.json();
-    return data.rank;
+    return typeof data.rank === 'number' ? data.rank : null;
   } catch {
-    return null;
+    return null;  // offline / network error — nothing was recorded server-side
   }
 }
+
+// Offline safety net: scores earned without a connection never reach the server
+// (submitScore fails silently). The best score is still saved locally, so push
+// it to the leaderboard whenever we're online — on load and when a connection
+// returns. The server keeps the max, so re-sending is harmless/idempotent; a
+// synced marker avoids redundant posts.
+async function syncBestScore() {
+  if (!username || !bestScore) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  if (localStorage.getItem('flappy_best_synced') === String(bestScore)) return;
+  const rank = await submitScore(bestScore);
+  if (rank !== null) localStorage.setItem('flappy_best_synced', String(bestScore));
+}
+
+window.addEventListener('online', syncBestScore);
 
 async function showLeaderboard() {
   leaderboardPanel.classList.remove('hidden');
@@ -487,7 +502,14 @@ async function die() {
 
   if (username) {
     const rank = await submitScore(score);
-    if (rank) rankDisplay.textContent = `You ranked #${rank} on the leaderboard!`;
+    if (rank) {
+      rankDisplay.textContent = `You ranked #${rank} on the leaderboard!`;
+      if (score >= bestScore) localStorage.setItem('flappy_best_synced', String(bestScore));
+    } else {
+      // couldn't reach the server (offline) — clear the marker so this best
+      // gets pushed automatically once we're back online
+      localStorage.removeItem('flappy_best_synced');
+    }
   }
 }
 
@@ -536,3 +558,4 @@ function startLoop() {
 initUsername();
 initGame();
 startLoop();
+syncBestScore();  // push any locally-cached best (e.g. earned offline) now we're online
