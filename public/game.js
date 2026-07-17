@@ -21,9 +21,14 @@ const ASSETS = {
 };
 
 // ── Sound effects (swap these to change sounds) ───────────────────────────────
-const SOUNDS = {
-  flap: 'assets/flap.ogg',  // plays on each flap/click
-  die:  'assets/die.ogg',   // plays on death
+// Provide each clip in AAC (.m4a) and Ogg. iOS Safari cannot decode the Ogg
+// container at all, so AAC is listed first; other engines that lack AAC (some
+// Firefox / codec-less Chromium builds) fall through to Ogg. We don't trust
+// canPlayType — it reports "maybe" and then fails — so the actual decode drives
+// the choice: try each source until one decodes.
+const SOUND_SOURCES = {
+  flap: ['assets/flap.m4a', 'assets/flap.ogg'],  // plays on each flap/click
+  die:  ['assets/die.m4a',  'assets/die.ogg'],   // plays on death
 };
 
 // Each clip is decoded ONCE into an AudioBuffer; playback then spins up a
@@ -34,23 +39,51 @@ let audioCtx = null;
 const audioBuffers = {};   // name -> AudioBuffer (Web Audio path)
 const audioPools   = {};   // name -> { els, i } (fallback path)
 
+// decodeAudioData across engines: modern browsers return a promise; older
+// iOS/Safari (webkitAudioContext) only supports the callback form.
+function decode(ctx, arrayBuf) {
+  return new Promise((resolve, reject) => {
+    const ret = ctx.decodeAudioData(arrayBuf, resolve, reject);
+    if (ret && typeof ret.then === 'function') ret.then(resolve, reject);
+  });
+}
+
+// Try each source URL until one both fetches and decodes; store the buffer.
+async function loadBuffer(name, urls) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      const arr = await res.arrayBuffer();
+      audioBuffers[name] = await decode(audioCtx, arr.slice(0));
+      return;
+    } catch { /* format not decodable here — try the next one */ }
+  }
+}
+
 function initAudio() {
+  // Always resume within the user gesture that called us — iOS starts the
+  // context suspended and only unlocks it inside a gesture handler.
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   if (audioCtx !== null) return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (AC) {
     audioCtx = new AC();
-    for (const [name, url] of Object.entries(SOUNDS)) {
-      fetch(url)
-        .then(r => r.arrayBuffer())
-        .then(buf => audioCtx.decodeAudioData(buf))
-        .then(decoded => { audioBuffers[name] = decoded; })
-        .catch(() => {});
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    for (const [name, urls] of Object.entries(SOUND_SOURCES)) {
+      loadBuffer(name, urls);
     }
   } else {
     audioCtx = false;  // Web Audio unavailable — build the fallback pools
-    for (const [name, url] of Object.entries(SOUNDS)) {
+    for (const [name, urls] of Object.entries(SOUND_SOURCES)) {
       const els = Array.from({ length: 4 }, () => {
-        const a = new Audio(url);
+        const a = new Audio();
+        // let the element negotiate a playable source
+        for (const url of urls) {
+          const s = document.createElement('source');
+          s.src = url;
+          s.type = url.endsWith('.m4a') ? 'audio/mp4' : 'audio/ogg';
+          a.appendChild(s);
+        }
         a.preload = 'auto';
         return a;
       });
