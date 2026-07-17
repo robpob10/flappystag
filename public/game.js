@@ -218,12 +218,12 @@ document.addEventListener('keydown', e => {
 canvas.addEventListener('click',     flap);
 canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, { passive: false });
 
-restartBtn.addEventListener('click',   () => { initGame(); loop(); });
+restartBtn.addEventListener('click',   () => { initGame(); startLoop(); });
 leaderboardBtn.addEventListener('click', showLeaderboard);
 closeLeaderboard.addEventListener('click', () => {
   leaderboardPanel.classList.add('hidden');
   initGame();
-  loop();
+  startLoop();
 });
 showLbBtn.addEventListener('click', showLeaderboard);
 
@@ -463,14 +463,40 @@ function render() {
   if (gameState === 'playing' || gameState === 'dead') drawScore();
 }
 
-function loop() {
+// Fixed-timestep loop: the simulation always advances in 1/60s steps, no matter
+// how often the display refreshes. Without this, 90/120 Hz screens (common on
+// Android) run the physics 1.5–2x faster than a 60 Hz iPhone. rAF drives the
+// redraw; an accumulator decides how many logical steps to run per redraw.
+const STEP_MS      = 1000 / 60;  // one logical frame (60 Hz baseline tuning)
+const MAX_FRAME_MS = 250;        // clamp long gaps (tab switch) to avoid a spiral
+let lastTime = 0, accumulator = 0;
+
+function frameLoop(now) {
   if (gameState === 'dead') return;
-  update();
+  if (lastTime === 0) lastTime = now;
+  let delta = now - lastTime;
+  lastTime = now;
+  if (delta < 0) delta = 0;
+  if (delta > MAX_FRAME_MS) delta = MAX_FRAME_MS;
+
+  accumulator += delta;
+  while (accumulator >= STEP_MS) {
+    update();
+    if (gameState === 'dead') break;  // die() stops the sim; don't over-step
+    accumulator -= STEP_MS;
+  }
+
   render();
-  animFrame = requestAnimationFrame(loop);
+  animFrame = requestAnimationFrame(frameLoop);
+}
+
+function startLoop() {
+  lastTime = 0;
+  accumulator = 0;
+  animFrame = requestAnimationFrame(frameLoop);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 initUsername();
 initGame();
-loop();
+startLoop();
