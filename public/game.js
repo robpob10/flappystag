@@ -26,17 +26,56 @@ const SOUNDS = {
   die:  'assets/die.ogg',   // plays on death
 };
 
-// Preload one Audio element per sound; clone on play so rapid flaps can overlap.
-const audioFlap = new Audio(SOUNDS.flap);
-const audioDie  = new Audio(SOUNDS.die);
-audioFlap.preload = 'auto';
-audioDie.preload  = 'auto';
+// Each clip is decoded ONCE into an AudioBuffer; playback then spins up a
+// throwaway BufferSource (cheap, no decode, no per-play media element). This
+// avoids the main-thread hitch of cloning/decoding an <audio> element on every
+// flap. Falls back to a small round-robin <audio> pool if Web Audio is absent.
+let audioCtx = null;
+const audioBuffers = {};   // name -> AudioBuffer (Web Audio path)
+const audioPools   = {};   // name -> { els, i } (fallback path)
 
-function playSound(base) {
+function initAudio() {
+  if (audioCtx !== null) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (AC) {
+    audioCtx = new AC();
+    for (const [name, url] of Object.entries(SOUNDS)) {
+      fetch(url)
+        .then(r => r.arrayBuffer())
+        .then(buf => audioCtx.decodeAudioData(buf))
+        .then(decoded => { audioBuffers[name] = decoded; })
+        .catch(() => {});
+    }
+  } else {
+    audioCtx = false;  // Web Audio unavailable — build the fallback pools
+    for (const [name, url] of Object.entries(SOUNDS)) {
+      const els = Array.from({ length: 4 }, () => {
+        const a = new Audio(url);
+        a.preload = 'auto';
+        return a;
+      });
+      audioPools[name] = { els, i: 0 };
+    }
+  }
+}
+
+function playSound(name) {
   try {
-    const sfx = base.cloneNode();
-    sfx.currentTime = 0;
-    sfx.play().catch(() => {});  // ignore autoplay/interaction errors
+    if (audioCtx && audioBuffers[name]) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioBuffers[name];
+      src.connect(audioCtx.destination);
+      src.start();
+      return;
+    }
+    const pool = audioPools[name];
+    if (pool) {
+      const a = pool.els[pool.i];
+      pool.i = (pool.i + 1) % pool.els.length;
+      a.currentTime = 0;
+      a.play().catch(() => {});
+    }
   } catch { /* audio unsupported — fail silently */ }
 }
 
@@ -128,13 +167,14 @@ function initGame() {
 
 // ── Input ─────────────────────────────────────────────────────────────────────
 function flap() {
+  initAudio();  // first user gesture: create/resume the audio context
   if (gameState === 'waiting') {
     gameState = 'playing';
     startScreen.classList.add('hidden');
   }
   if (gameState === 'playing') {
     bird.vy = CFG.flapForce;
-    playSound(audioFlap);
+    playSound('flap');
   }
   if (gameState === 'dead') return;
 }
@@ -230,11 +270,13 @@ async function showLeaderboard() {
 }
 
 // ── Draw helpers ──────────────────────────────────────────────────────────────
+// Sky gradient never changes — build it once instead of every frame.
+const skyGradient = ctx.createLinearGradient(0, 0, 0, CFG.height - CFG.groundHeight);
+skyGradient.addColorStop(0, '#70c5ce');
+skyGradient.addColorStop(1, '#c9eaf5');
+
 function drawSky() {
-  const grad = ctx.createLinearGradient(0, 0, 0, CFG.height - CFG.groundHeight);
-  grad.addColorStop(0,   '#70c5ce');
-  grad.addColorStop(1,   '#c9eaf5');
-  ctx.fillStyle = grad;
+  ctx.fillStyle = skyGradient;
   ctx.fillRect(0, 0, CFG.width, CFG.height - CFG.groundHeight);
 }
 
@@ -363,7 +405,7 @@ function update() {
 async function die() {
   gameState = 'dead';
   cancelAnimationFrame(animFrame);
-  playSound(audioDie);
+  playSound('die');
 
   if (score > bestScore) {
     bestScore = score;
