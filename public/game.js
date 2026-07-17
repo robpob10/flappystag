@@ -93,6 +93,7 @@ function initAudio() {
 }
 
 function playSound(name) {
+  if (muted) return;
   try {
     if (audioCtx && audioBuffers[name]) {
       if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -115,6 +116,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let bestScore = parseInt(localStorage.getItem('flappy_best') || '0', 10);
+let muted = localStorage.getItem('flappy_muted') === '1';
 
 let bird, pipes, score, frame, gameState, animFrame;
 // gameState: 'waiting' | 'playing' | 'dead'
@@ -156,6 +158,24 @@ const leaderboardList  = document.getElementById('leaderboard-list');
 const closeLeaderboard = document.getElementById('close-leaderboard');
 const showLbBtn        = document.getElementById('show-leaderboard-btn');
 const bestScoreDisplay = document.getElementById('best-score-display');
+const muteBtn          = document.getElementById('mute-btn');
+
+// ── Mute toggle ───────────────────────────────────────────────────────────────
+function renderMute() {
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+  muteBtn.classList.toggle('muted', muted);
+  muteBtn.setAttribute('aria-pressed', String(muted));
+  muteBtn.setAttribute('aria-label', muted ? 'Unmute sound' : 'Mute sound');
+}
+
+function toggleMute() {
+  muted = !muted;
+  localStorage.setItem('flappy_muted', muted ? '1' : '0');
+  renderMute();
+}
+
+muteBtn.addEventListener('click', toggleMute);
+renderMute();
 
 // ── Username flow ─────────────────────────────────────────────────────────────
 function initUsername() {
