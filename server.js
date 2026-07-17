@@ -46,7 +46,12 @@ app.post('/api/score', (req, res) => {
 
   board.sort((a, b) => b.score - a.score);
   writeLeaderboard(board);
-  res.json({ rank: board.findIndex(e => e.username === username) + 1 });
+
+  // Joint placing: rank is the number of players with a strictly higher score
+  // + 1, so tied players share the same rank.
+  const best = board.find(e => e.username === username).score;
+  const rank = board.filter(e => e.score > best).length + 1;
+  res.json({ rank });
 });
 
 app.listen(PORT, () => console.log(`Flappy Stag running on http://localhost:${PORT}`));

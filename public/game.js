@@ -311,9 +311,13 @@ async function showLeaderboard() {
       leaderboardList.innerHTML = '<li>No scores yet!</li>';
       return;
     }
+    // Joint placing: equal scores share a rank (1, 2, 2, 4, …). data is sorted
+    // by score descending, so a rank only advances when the score changes.
+    let rank = 0, prevScore = null;
     data.forEach((entry, i) => {
+      if (entry.score !== prevScore) { rank = i + 1; prevScore = entry.score; }
       const li = document.createElement('li');
-      li.innerHTML = `<span>#${i+1} ${entry.username}</span><span>${entry.score}</span>`;
+      li.innerHTML = `<span>#${rank} ${entry.username}</span><span>${entry.score}</span>`;
       if (entry.username === username) li.classList.add('me');
       leaderboardList.appendChild(li);
     });

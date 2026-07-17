@@ -19,8 +19,12 @@ module.exports = async function handler(req, res) {
       await redis.zadd('leaderboard', { score, member: username });
     }
 
-    const rank = await redis.zrevrank('leaderboard', username);
-    res.json({ rank: rank + 1 });
+    // Joint placing: everyone with the same score shares the same rank, so a
+    // player's rank is the number of players with a STRICTLY higher score + 1
+    // (rather than zrevrank, which breaks ties by member and gives 1,2,3,4).
+    const best = await redis.zscore('leaderboard', username);
+    const higher = await redis.zcount('leaderboard', `(${best}`, '+inf');
+    res.json({ rank: higher + 1 });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to save score' });
