@@ -300,11 +300,18 @@ function checkCollision() {
 // ── Score submission ──────────────────────────────────────────────────────────
 async function submitScore(s) {
   try {
+    // Fetch a one-time play token, then submit with it. The server rejects
+    // score posts without a valid token, which blocks manual/curl submissions.
+    const tRes = await fetch('/api/token');
+    if (!tRes.ok) return null;
+    const { token } = await tRes.json();
+
     const res = await fetch('/api/score', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-score-token': token },
       body: JSON.stringify({ username, score: s }),
     });
+    if (!res.ok) return null;
     const data = await res.json();
     return typeof data.rank === 'number' ? data.rank : null;
   } catch {

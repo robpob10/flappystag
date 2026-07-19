@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -6,8 +7,45 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const LEADERBOARD_FILE = path.join(__dirname, 'leaderboard.json');
 
+const SECRET = process.env.SCORE_SECRET || process.env.KV_REST_API_TOKEN || 'flappy-dev-secret';
+const TTL_MS = 120000;
+const usedNonces = new Set(); // single-use tokens (in-memory for local dev)
+
+function sign(data) {
+  return crypto.createHmac('sha256', SECRET).update(data).digest('hex');
+}
+
+function safeEq(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function tokenOK(token) {
+  if (typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const [exp, nonce, sig] = parts;
+  if (!safeEq(sig, sign(`${exp}.${nonce}`))) return false;
+  const expNum = Number(exp);
+  const now = Date.now();
+  if (!Number.isFinite(expNum) || expNum < now || expNum > now + 130000) return false;
+  if (usedNonces.has(nonce)) return false;
+  usedNonces.add(nonce);
+  setTimeout(() => usedNonces.delete(nonce), 200000).unref?.();
+  return true;
+}
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/token', (req, res) => {
+  const exp = Date.now() + TTL_MS;
+  const nonce = crypto.randomBytes(9).toString('hex');
+  const payload = `${exp}.${nonce}`;
+  res.set('Cache-Control', 'no-store');
+  res.json({ token: `${payload}.${sign(payload)}` });
+});
 
 function readLeaderboard() {
   if (!fs.existsSync(LEADERBOARD_FILE)) return [];
@@ -28,6 +66,10 @@ app.get('/api/leaderboard', (req, res) => {
 });
 
 app.post('/api/score', (req, res) => {
+  if (!tokenOK(req.headers['x-score-token'])) {
+    return res.status(401).send('fuck off');
+  }
+
   const { username, score } = req.body;
   if (!username || typeof score !== 'number') {
     return res.status(400).json({ error: 'Invalid payload' });
