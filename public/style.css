@@ -49,7 +49,7 @@ body {
 
 #show-results-btn:hover { background: #e09510; }
 
-/* Mute toggle — top right */
+/* Mute toggle, top right */
 #mute-btn {
   position: fixed;
   top: 12px;

@@ -72,7 +72,7 @@ function voteLabel(v) {
   return `${c.flag} ${c.name} · ${weekendLabel(v.weekend)}`;
 }
 
-// Area centroid of each outline (normalised units) — where the date label and
+// Area centroid of each outline (normalised units): where the date label and
 // stem go, since it's reliably inside the shape.
 for (const shape of Object.values(COUNTRY_SHAPES)) {
   const p = shape.pts;
@@ -91,7 +91,7 @@ for (const shape of Object.values(COUNTRY_SHAPES)) {
 // Provide each clip in AAC (.m4a) and Ogg. iOS Safari cannot decode the Ogg
 // container at all, so AAC is listed first; other engines that lack AAC (some
 // Firefox / codec-less Chromium builds) fall through to Ogg. We don't trust
-// canPlayType — it reports "maybe" and then fails — so the actual decode drives
+// canPlayType (it reports "maybe" and then fails), so the actual decode drives
 // the choice: try each source until one decodes.
 const SOUND_SOURCES = {
   flap: ['assets/flap.m4a', 'assets/flap.ogg'],  // plays on each flap/click
@@ -123,12 +123,12 @@ async function loadBuffer(name, urls) {
       const arr = await res.arrayBuffer();
       audioBuffers[name] = await decode(audioCtx, arr.slice(0));
       return;
-    } catch { /* format not decodable here — try the next one */ }
+    } catch { /* format not decodable here; try the next one */ }
   }
 }
 
 function initAudio() {
-  // Always resume within the user gesture that called us — iOS starts the
+  // Always resume within the user gesture that called us: iOS starts the
   // context suspended and only unlocks it inside a gesture handler.
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   if (audioCtx !== null) return;
@@ -140,7 +140,7 @@ function initAudio() {
       loadBuffer(name, urls);
     }
   } else {
-    audioCtx = false;  // Web Audio unavailable — build the fallback pools
+    audioCtx = false;  // Web Audio unavailable: build the fallback pools
     for (const [name, urls] of Object.entries(SOUND_SOURCES)) {
       const els = Array.from({ length: 4 }, () => {
         const a = new Audio();
@@ -177,7 +177,7 @@ function playSound(name) {
       a.currentTime = 0;
       a.play().catch(() => {});
     }
-  } catch { /* audio unsupported — fail silently */ }
+  } catch { /* audio unsupported: fail silently */ }
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ const comboKey = v => `${v.country}|${v.weekend}`;
 
 function renderMyVotes() {
   myVoteDisplay.textContent = myVotes.size
-    ? `You've voted for ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} trips — crash into more to add them`
+    ? `You've voted for ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} trips. Crash into more to add them!`
     : '';
 }
 
@@ -470,7 +470,7 @@ async function submitVote(vote) {
     if (!res.ok) return null;
     return await res.json();  // { ok, already }
   } catch {
-    return null;  // offline / network error — nothing was recorded server-side
+    return null;  // offline / network error: nothing was recorded server-side
   }
 }
 
@@ -514,7 +514,7 @@ async function castVote() {
       ? "You've already voted for this one 👍"
       : 'Vote saved! 🎉 Crash into other trips to vote for them too.';
   } else {
-    voteStatus.textContent = "Couldn't save your vote — check your connection and try again.";
+    voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
   }
 }
 
@@ -545,7 +545,7 @@ function renderResults(votes) {
   }
 
   if (!votes.length) {
-    resultsLeader.textContent = 'No votes yet — go crash into somewhere!';
+    resultsLeader.textContent = 'No votes yet. Go crash into somewhere!';
   } else {
     const top = Math.max(...Object.values(byCombo));
     const leaders = Object.keys(byCombo).filter(k => byCombo[k] === top).map(k => {
@@ -558,7 +558,7 @@ function renderResults(votes) {
     const peopleLabel = n => `${n} ${n === 1 ? 'person' : 'people'}`;
     resultsLeader.textContent = leaders.length === 1
       ? `Leading: ${leaders[0]} (${top} of ${peopleLabel(people)})`
-      : `${peopleLabel(people)} voted — no single favourite yet`;
+      : `${peopleLabel(people)} voted. No single favourite yet.`;
   }
 
   const maxC = Math.max(0, ...Object.values(byCountry));
@@ -611,7 +611,7 @@ async function showResults() {
 }
 
 // ── Draw helpers ──────────────────────────────────────────────────────────────
-// Sky gradient never changes — build it once instead of every frame.
+// Sky gradient never changes, so build it once instead of every frame.
 const skyGradient = ctx.createLinearGradient(0, 0, 0, CFG.height - CFG.groundHeight);
 skyGradient.addColorStop(0, '#70c5ce');
 skyGradient.addColorStop(1, '#c9eaf5');
@@ -776,7 +776,7 @@ function die(hit) {
   } else {
     crashed = null;
     crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';
-    crashSub.textContent = 'No vote — crash into a country to vote for it.';
+    crashSub.textContent = 'No vote. Crash into a country to vote for it.';
     crashCard.classList.add('hidden');
     voteBtn.classList.add('hidden');
   }
