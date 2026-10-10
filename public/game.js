@@ -32,39 +32,41 @@ const COUNTRIES = [
 ];
 const COUNTRY_BY_ID = Object.fromEntries(COUNTRIES.map(c => [c.id, c]));
 
-// Every weekend in March and April 2027, keyed by the Saturday.
+// Long weekends (Fri–Mon) in March and April 2027, keyed by the Saturday.
+// 12–15 Mar is out: the organiser can't make it.
 const WEEKENDS = [
-  '2027-03-06', '2027-03-13', '2027-03-20', '2027-03-27',
+  '2027-03-06', '2027-03-20', '2027-03-27',
   '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
 ];
-const EASTER_WEEKEND = '2027-03-27';  // Easter Sunday is 28 March 2027
+const EASTER_WEEKEND = '2027-03-27';  // Good Friday 26 March to Easter Monday 29 March
 
 const MONTHS      = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                      'August', 'September', 'October', 'November', 'December'];
 
+// [Friday, Monday] around the Saturday id.
 function weekendDays(id) {
-  const sat = new Date(`${id}T00:00:00Z`);
-  return [sat, new Date(sat.getTime() + 86400000)];
+  const sat = new Date(`${id}T00:00:00Z`).getTime();
+  return [new Date(sat - 86400000), new Date(sat + 2 * 86400000)];
 }
 
-// "6–7 Mar" (or "31 Jul – 1 Aug" across a month end)
+// "5–8 Mar" (or "30 Apr – 3 May" across a month end)
 function weekendLabel(id) {
-  const [sat, sun] = weekendDays(id);
-  const sm = MONTHS[sat.getUTCMonth()], um = MONTHS[sun.getUTCMonth()];
-  return sm === um
-    ? `${sat.getUTCDate()}–${sun.getUTCDate()} ${um}`
-    : `${sat.getUTCDate()} ${sm} – ${sun.getUTCDate()} ${um}`;
+  const [fri, mon] = weekendDays(id);
+  const fm = MONTHS[fri.getUTCMonth()], mm = MONTHS[mon.getUTCMonth()];
+  return fm === mm
+    ? `${fri.getUTCDate()}–${mon.getUTCDate()} ${mm}`
+    : `${fri.getUTCDate()} ${fm} – ${mon.getUTCDate()} ${mm}`;
 }
 
-// "Sat 27 – Sun 28 March 2027 (Easter)"
+// "Fri 26 – Mon 29 March 2027 (Easter)"
 function weekendLongLabel(id) {
-  const [sat, sun] = weekendDays(id);
-  const satPart = sat.getUTCMonth() === sun.getUTCMonth()
-    ? `Sat ${sat.getUTCDate()}`
-    : `Sat ${sat.getUTCDate()} ${MONTHS_LONG[sat.getUTCMonth()]}`;
+  const [fri, mon] = weekendDays(id);
+  const friPart = fri.getUTCMonth() === mon.getUTCMonth()
+    ? `Fri ${fri.getUTCDate()}`
+    : `Fri ${fri.getUTCDate()} ${MONTHS_LONG[fri.getUTCMonth()]}`;
   const easter = id === EASTER_WEEKEND ? ' (Easter)' : '';
-  return `${satPart} – Sun ${sun.getUTCDate()} ${MONTHS_LONG[sun.getUTCMonth()]} ${sun.getUTCFullYear()}${easter}`;
+  return `${friPart} – Mon ${mon.getUTCDate()} ${MONTHS_LONG[mon.getUTCMonth()]} ${mon.getUTCFullYear()}${easter}`;
 }
 
 function voteLabel(v) {

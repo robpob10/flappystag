@@ -3,9 +3,10 @@
 // public/game.js (which holds the shapes, colours and labels).
 const COUNTRIES = ['tunisia', 'morocco'];
 
-// Every weekend in March and April 2027, keyed by the Saturday.
+// Long weekends (Fri–Mon) in March and April 2027, keyed by the Saturday.
+// 12–15 Mar is out: the organiser can't make it.
 const WEEKENDS = [
-  '2027-03-06', '2027-03-13', '2027-03-20', '2027-03-27',
+  '2027-03-06', '2027-03-20', '2027-03-27',
   '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
 ];
 
