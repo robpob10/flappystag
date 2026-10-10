@@ -9,66 +9,75 @@ const WEEKENDS = [
   '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
 ];
 
-// Your score when you crash into a pillar is how many votes you give it. Each
-// person's best score per combo is what counts, kept in a sorted set:
-// member "country|weekend|username" -> best score.
-const SCORES_KEY = 'holiday:scores';
-// Votes from before scores counted (a hash of { username, country, weekend }).
-// Each still counts as 1 vote unless that person has since scored higher.
-const OLD_VOTES_KEY = 'holiday:votes';
-const LEGACY_KEYS = ['leaderboard'];  // the old Flappy Stag high scores
+// Every crash is one vote, up or down, on the pillar you hit, and you can
+// vote as often as you like. Counts live in a hash:
+// "country|weekend|up|username" -> number of votes.
+const TALLY_KEY = 'holiday:tally';
+const DIRS = ['up', 'down'];
 
-const MAX_SCORE = 999;  // sanity cap on what a single run can give
+// Votes from earlier versions (single votes, then best scores per trip). Each
+// person's vote on a trip there still counts as one upvote.
+const OLD_VOTES_KEY = 'holiday:votes';    // hash of { username, country, weekend }
+const OLD_SCORES_KEY = 'holiday:scores';  // sorted set of "country|weekend|username"
+const LEGACY_KEYS = ['leaderboard'];      // the old Flappy Stag high scores
 
 // Validates a vote posted by the game; returns a clean vote or null.
 function parseVote(body) {
-  const { username, country, weekend, score } = body || {};
+  const { username, country, weekend, dir } = body || {};
   if (typeof username !== 'string') return null;
   const name = username.trim().slice(0, 20);
   if (!name || !COUNTRIES.includes(country) || !WEEKENDS.includes(weekend)) return null;
-  if (!Number.isInteger(score) || score < 1 || score > MAX_SCORE) return null;
-  return { username: name, country, weekend, score };
+  if (!DIRS.includes(dir)) return null;
+  return { username: name, country, weekend, dir };
 }
 
-// Sorted-set member for one person's votes on one combo. Country and weekend
-// never contain "|", so splitting on the first two recovers the username.
-function voteMember({ username, country, weekend }) {
-  return `${country}|${weekend}|${username}`;
+// Hash field for one person's up (or down) votes on one trip. Country, weekend
+// and direction never contain "|", so everything after them is the username.
+function tallyField({ country, weekend, dir, username }) {
+  return `${country}|${weekend}|${dir}|${username}`;
 }
 
-function parseMember(member) {
-  const [country, weekend, ...rest] = String(member).split('|');
-  return { country, weekend, username: rest.join('|') };
-}
+const isOption = v => v && typeof v.username === 'string'
+  && COUNTRIES.includes(v.country) && WEEKENDS.includes(v.weekend);
 
-// Builds the list of { username, country, weekend, score } (one per person
-// per combo, their best score) from [member, score] pairs plus any old-style
-// votes, dropping anything that isn't a current ballot option.
-function toScoreList(pairs, oldVotes) {
-  const best = new Map();
-  const add = (v, score) => {
-    if (!v || typeof v.username !== 'string' || !COUNTRIES.includes(v.country) || !WEEKENDS.includes(v.weekend)) return;
-    if (!(score > 0)) return;
-    const key = voteMember(v);
-    const prev = best.get(key);
-    if (!prev || score > prev.score) {
-      best.set(key, { username: v.username, country: v.country, weekend: v.weekend, score });
-    }
+// One row per person per trip, { username, country, weekend, up, down },
+// dropping anything that isn't a current ballot option.
+function toVoteList(tally, oldScoreMembers, oldVotes) {
+  const rows = new Map();
+  const row = v => {
+    const key = `${v.country}|${v.weekend}|${v.username}`;
+    if (!rows.has(key)) rows.set(key, { username: v.username, country: v.country, weekend: v.weekend, up: 0, down: 0 });
+    return rows.get(key);
   };
-  for (const [member, score] of pairs) add(parseMember(member), Number(score));
+
+  for (const [field, n] of Object.entries(tally || {})) {
+    const [country, weekend, dir, ...rest] = String(field).split('|');
+    const v = { country, weekend, username: rest.join('|') };
+    const count = Number(n);
+    if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] += count;
+  }
+
+  // Older votes: one upvote per person per trip, however they were stored.
+  const old = new Map();
+  for (const member of oldScoreMembers || []) {
+    const [country, weekend, ...rest] = String(member).split('|');
+    const v = { country, weekend, username: rest.join('|') };
+    if (isOption(v)) old.set(`${country}|${weekend}|${v.username}`, v);
+  }
   for (const [field, raw] of Object.entries(oldVotes || {})) {
     let v = raw;
     if (typeof v === 'string') {
       try { v = JSON.parse(v); } catch { continue; }
     }
-    // the very first version keyed votes by username
-    if (v && typeof v.username !== 'string') v = { ...v, username: field };
-    add(v, 1);
+    if (v && typeof v.username !== 'string') v = { ...v, username: field };  // keyed by name
+    if (isOption(v)) old.set(`${v.country}|${v.weekend}|${v.username}`, v);
   }
-  return [...best.values()];
+  for (const v of old.values()) row(v).up += 1;
+
+  return [...rows.values()];
 }
 
 module.exports = {
-  COUNTRIES, WEEKENDS, SCORES_KEY, OLD_VOTES_KEY, LEGACY_KEYS,
-  parseVote, voteMember, toScoreList,
+  COUNTRIES, WEEKENDS, TALLY_KEY, OLD_VOTES_KEY, OLD_SCORES_KEY, LEGACY_KEYS,
+  parseVote, tallyField, toVoteList,
 };

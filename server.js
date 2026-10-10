@@ -2,11 +2,11 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { parseVote, voteMember, toScoreList } = require('./api/_holiday');
+const { parseVote, tallyField, toVoteList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SCORES_FILE = path.join(__dirname, 'scores.json');
+const TALLY_FILE = path.join(__dirname, 'tally.json');
 
 const SECRET = process.env.SCORE_SECRET || process.env.KV_REST_API_TOKEN || 'flappy-dev-secret';
 const TTL_MS = 120000;
@@ -48,11 +48,11 @@ app.get('/api/token', (req, res) => {
   res.json({ token: `${payload}.${sign(payload)}` });
 });
 
-// member "country|weekend|username" -> best score (mirrors the Redis sorted set)
-function readScores() {
-  if (!fs.existsSync(SCORES_FILE)) return {};
+// "country|weekend|up|username" -> count (mirrors the Redis hash)
+function readTally() {
+  if (!fs.existsSync(TALLY_FILE)) return {};
   try {
-    return JSON.parse(fs.readFileSync(SCORES_FILE, 'utf8'));
+    return JSON.parse(fs.readFileSync(TALLY_FILE, 'utf8'));
   } catch {
     return {};
   }
@@ -60,7 +60,7 @@ function readScores() {
 
 app.get('/api/votes', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json(toScoreList(Object.entries(readScores())));
+  res.json(toVoteList(readTally()));
 });
 
 app.post('/api/vote', (req, res) => {
@@ -71,15 +71,12 @@ app.post('/api/vote', (req, res) => {
   const vote = parseVote(req.body);
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  // Your score is how many votes you give this combo; only your best counts.
-  const scores = readScores();
-  const member = voteMember(vote);
-  const improved = !(scores[member] >= vote.score);
-  if (improved) {
-    scores[member] = vote.score;
-    fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2));
-  }
-  res.json({ ok: true, improved, best: scores[member] });
+  // One vote per crash, up or down, as many times as you like.
+  const tally = readTally();
+  const field = tallyField(vote);
+  tally[field] = (tally[field] || 0) + 1;
+  fs.writeFileSync(TALLY_FILE, JSON.stringify(tally, null, 2));
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => console.log(`Flappy Holiday running on http://localhost:${PORT}`));

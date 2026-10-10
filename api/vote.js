@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
-const { SCORES_KEY, parseVote, voteMember } = require('./_holiday');
+const { TALLY_KEY, parseVote, tallyField } = require('./_holiday');
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -51,12 +51,9 @@ module.exports = async function handler(req, res) {
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
   try {
-    // Your score is how many votes you give this combo, and only your best
-    // counts: GT never lowers a score, CH reports whether it changed.
-    const member = voteMember(vote);
-    const changed = await redis.zadd(SCORES_KEY, { gt: true, ch: true }, { score: vote.score, member });
-    const best = changed ? vote.score : Number(await redis.zscore(SCORES_KEY, member));
-    res.json({ ok: true, improved: changed > 0, best });
+    // One vote per crash, up or down, as many times as you like.
+    await redis.hincrby(TALLY_KEY, tallyField(vote), 1);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to save vote' });

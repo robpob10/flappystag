@@ -111,7 +111,7 @@ body {
 
 .modal-box input:focus { border-color: #f5a623; }
 
-.modal-box button, #vote-btn, #restart-btn, #results-btn, #close-results {
+.modal-box button, .vote-btn, #restart-btn, #results-btn, #close-results {
   background: #f5a623;
   border: none;
   border-radius: 10px;
@@ -122,13 +122,15 @@ body {
   color: #333;
 }
 
-.modal-box button:hover, #vote-btn:hover, #restart-btn:hover, #results-btn:hover, #close-results:hover {
+.modal-box button:hover, .vote-btn:hover, #restart-btn:hover, #results-btn:hover, #close-results:hover {
   background: #e09510;
 }
 
-#vote-btn { background: #4caf50; color: #fff; }
-#vote-btn:hover { background: #388e3c; }
-#vote-btn:disabled { opacity: 0.6; cursor: default; }
+#up-btn { background: #4caf50; color: #fff; }
+#up-btn:hover { background: #388e3c; }
+#down-btn { background: #e4312b; color: #fff; }
+#down-btn:hover { background: #b9221d; }
+.vote-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Overlay screens */
 #start-screen, #game-over-screen {
@@ -232,7 +234,7 @@ body {
 
 .bars li {
   display: grid;
-  grid-template-columns: 112px 1fr 24px;
+  grid-template-columns: 112px 1fr 36px;
   align-items: center;
   gap: 8px;
   padding: 3px 0;
@@ -247,6 +249,7 @@ body {
 }
 
 .bars .bar span { display: block; height: 100%; border-radius: 7px; background: #f5a623; }
+.bars .bar span.neg { background: #e4312b; }
 .bars .count { text-align: right; font-weight: bold; }
 
 #results-voters li {

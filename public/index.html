@@ -44,7 +44,7 @@
 
   <div id="start-screen">
     <h1>Flappy Holiday</h1>
-    <p>Crash into a pillar to vote for it. Your score is how many votes it gets!</p>
+    <p>Crash into a pillar, then vote it up or down!</p>
     <p>Press <strong>Space</strong> or <strong>Tap</strong> to flap</p>
     <p id="my-vote-display"></p>
   </div>
@@ -56,12 +56,15 @@
       <span id="crash-country"></span>
       <span id="crash-weekend"></span>
     </div>
+    <div id="vote-row" class="btn-row">
+      <button id="up-btn" class="vote-btn">👍 Upvote</button>
+      <button id="down-btn" class="vote-btn">👎 Downvote</button>
+    </div>
     <p id="vote-status"></p>
     <div class="btn-row">
-      <button id="vote-btn">Vote for this</button>
       <button id="restart-btn">Try again</button>
+      <button id="results-btn">Results</button>
     </div>
-    <button id="results-btn">Results</button>
   </div>
 
   <script src="shapes.js"></script>
