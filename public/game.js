@@ -183,7 +183,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVoteCount = 0;  // votes this player has cast (refreshed from the server)
+let myVotes = new Set();  // "country|weekend" combos this player has voted for
 // Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
@@ -297,9 +297,11 @@ function initGame() {
   resultsPanel.classList.add('hidden');
 }
 
+const comboKey = v => `${v.country}|${v.weekend}`;
+
 function renderMyVotes() {
-  myVoteDisplay.textContent = myVoteCount
-    ? `You've voted ${myVoteCount} time${myVoteCount === 1 ? '' : 's'} — keep going!`
+  myVoteDisplay.textContent = myVotes.size
+    ? `You've voted for ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} trips — crash into more to add them`
     : '';
 }
 
@@ -457,7 +459,7 @@ async function submitVote(vote) {
     // Fetch a one-time play token, then vote with it. The server rejects
     // votes without a valid token, which blocks manual/curl submissions.
     const tRes = await fetch('/api/token');
-    if (!tRes.ok) return false;
+    if (!tRes.ok) return null;
     const { token } = await tRes.json();
 
     const res = await fetch('/api/vote', {
@@ -465,9 +467,10 @@ async function submitVote(vote) {
       headers: { 'Content-Type': 'application/json', 'x-vote-token': token },
       body: JSON.stringify({ username, country: vote.country, weekend: vote.weekend }),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    return await res.json();  // { ok, already }
   } catch {
-    return false;  // offline / network error — nothing was recorded server-side
+    return null;  // offline / network error — nothing was recorded server-side
   }
 }
 
@@ -483,7 +486,7 @@ async function fetchVotes() {
 
 function countMyVotes(votes) {
   if (!username) return;
-  myVoteCount = votes.filter(v => v.username === username).length;
+  myVotes = new Set(votes.filter(v => v.username === username).map(comboKey));
   renderMyVotes();
 }
 
@@ -499,15 +502,17 @@ async function castVote() {
   const vote = crashed;
   voteBtn.disabled = true;
   voteBtn.textContent = 'Saving…';
-  const ok = await submitVote(vote);
+  const result = await submitVote(vote);
   voteBtn.disabled = false;
   voteBtn.textContent = 'Vote for this';
-  if (ok) {
-    // One vote per crash — crash again to vote again.
-    myVoteCount++;
+  if (result) {
+    // You can back as many trips as you like, but each one only once.
+    myVotes.add(comboKey(vote));
     renderMyVotes();
     voteBtn.classList.add('hidden');
-    voteStatus.textContent = 'Vote saved! 🎉 Crash again to vote again.';
+    voteStatus.textContent = result.already
+      ? "You've already voted for this one 👍"
+      : 'Vote saved! 🎉 Crash into other trips to vote for them too.';
   } else {
     voteStatus.textContent = "Couldn't save your vote — check your connection and try again.";
   }
@@ -547,10 +552,13 @@ function renderResults(votes) {
       const [country, weekend] = k.split('|');
       return voteLabel({ country, weekend });
     });
-    const total = `${votes.length} vote${votes.length === 1 ? '' : 's'}`;
+    // Each person can vote for a trip once, so a trip's count is how many
+    // people are up for it.
+    const people = new Set(votes.map(v => v.username)).size;
+    const peopleLabel = n => `${n} ${n === 1 ? 'person' : 'people'}`;
     resultsLeader.textContent = leaders.length === 1
-      ? `Leading: ${leaders[0]} (${top} of ${total})`
-      : `${total} so far — no single favourite yet`;
+      ? `Leading: ${leaders[0]} (${top} of ${peopleLabel(people)})`
+      : `${peopleLabel(people)} voted — no single favourite yet`;
   }
 
   const maxC = Math.max(0, ...Object.values(byCountry));
@@ -762,7 +770,9 @@ function die(hit) {
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    voteBtn.classList.remove('hidden');
+    const already = myVotes.has(comboKey(crashed));
+    voteBtn.classList.toggle('hidden', already);
+    if (already) voteStatus.textContent = "You've already voted for this one 👍";
   } else {
     crashed = null;
     crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';
@@ -819,4 +829,4 @@ function startLoop() {
 initUsername();
 initGame();
 startLoop();
-syncMyVotes();  // pick up this player's vote count from the server
+syncMyVotes();  // pick up this player's votes from the server

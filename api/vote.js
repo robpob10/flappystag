@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
-const { VOTES_KEY, parseVote, newVoteId } = require('./_holiday');
+const { VOTES_KEY, parseVote, voteField } = require('./_holiday');
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -51,9 +51,9 @@ module.exports = async function handler(req, res) {
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
   try {
-    // Unlimited votes: every vote is its own entry.
-    await redis.hset(VOTES_KEY, { [newVoteId()]: { ...vote, at: new Date().toISOString() } });
-    res.json({ ok: true });
+    // One vote per person per combo: a repeat leaves the original in place.
+    const added = await redis.hsetnx(VOTES_KEY, voteField(vote), { ...vote, at: new Date().toISOString() });
+    res.json({ ok: true, already: added === 0 });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to save vote' });

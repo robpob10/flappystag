@@ -1,5 +1,3 @@
-const crypto = require('crypto');
-
 // The ballot: every pillar in the game is one of these destinations with one
 // of these weekends attached. Keep the ids in sync with COUNTRIES / WEEKENDS in
 // public/game.js (which holds the shapes, colours and labels).
@@ -11,9 +9,10 @@ const WEEKENDS = [
   '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
 ];
 
-// hash: vote id -> { username, country, weekend, at }. Votes are unlimited, so
-// each one gets its own id; entries from the one-vote-each days are keyed by
-// username instead and still count.
+// hash: "country|weekend|username" -> { username, country, weekend, at }.
+// Everyone can back as many combos as they like, but each combo only once.
+// (Older entries are keyed by username or a random id; toVoteList folds any
+// repeats among them into one vote.)
 const VOTES_KEY = 'holiday:votes';
 const LEGACY_KEYS = ['leaderboard'];  // the old Flappy Stag high scores
 
@@ -26,26 +25,35 @@ function parseVote(body) {
   return { username: name, country, weekend };
 }
 
-// A fresh hash field for each vote.
-function newVoteId() {
-  return `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+// The hash field for a vote: one per person per country + weekend combo.
+// Country and weekend never contain "|", so this can't collide.
+function voteField({ username, country, weekend }) {
+  return `${country}|${weekend}|${username}`;
 }
 
-// Turns the stored vote map into a list, oldest first, dropping anything that
-// isn't a current ballot option (e.g. Spain, which has been removed).
+// Turns the stored vote map into a list, oldest first: one vote per person per
+// combo, dropping anything that isn't a current ballot option (e.g. Spain,
+// which has been removed).
 function toVoteList(map) {
-  const votes = [];
+  const votes = new Map();
   for (const [field, raw] of Object.entries(map || {})) {
     let v = raw;
     if (typeof v === 'string') {
       try { v = JSON.parse(v); } catch { continue; }
     }
     if (v && COUNTRIES.includes(v.country) && WEEKENDS.includes(v.weekend)) {
-      const username = typeof v.username === 'string' ? v.username : field;
-      votes.push({ username, country: v.country, weekend: v.weekend, at: v.at || null });
+      const vote = {
+        username: typeof v.username === 'string' ? v.username : field,
+        country: v.country,
+        weekend: v.weekend,
+        at: v.at || null,
+      };
+      const key = voteField(vote);
+      const seen = votes.get(key);
+      if (!seen || String(vote.at) < String(seen.at)) votes.set(key, vote);
     }
   }
-  return votes.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  return [...votes.values()].sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
 
-module.exports = { COUNTRIES, WEEKENDS, VOTES_KEY, LEGACY_KEYS, parseVote, newVoteId, toVoteList };
+module.exports = { COUNTRIES, WEEKENDS, VOTES_KEY, LEGACY_KEYS, parseVote, voteField, toVoteList };

@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { parseVote, newVoteId, toVoteList } = require('./api/_holiday');
+const { parseVote, voteField, toVoteList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,11 +70,15 @@ app.post('/api/vote', (req, res) => {
   const vote = parseVote(req.body);
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  // Unlimited votes: every vote is its own entry.
+  // One vote per person per combo: a repeat leaves the original in place.
   const votes = readVotes();
-  votes[newVoteId()] = { ...vote, at: new Date().toISOString() };
-  fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2));
-  res.json({ ok: true });
+  const field = voteField(vote);
+  const already = field in votes;
+  if (!already) {
+    votes[field] = { ...vote, at: new Date().toISOString() };
+    fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2));
+  }
+  res.json({ ok: true, already });
 });
 
 app.listen(PORT, () => console.log(`Flappy Holiday running on http://localhost:${PORT}`));
