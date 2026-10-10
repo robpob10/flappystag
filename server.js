@@ -2,10 +2,11 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { parseVote, toVoteList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const LEADERBOARD_FILE = path.join(__dirname, 'leaderboard.json');
+const VOTES_FILE = path.join(__dirname, 'votes.json');
 
 const SECRET = process.env.SCORE_SECRET || process.env.KV_REST_API_TOKEN || 'flappy-dev-secret';
 const TTL_MS = 120000;
@@ -47,53 +48,34 @@ app.get('/api/token', (req, res) => {
   res.json({ token: `${payload}.${sign(payload)}` });
 });
 
-function readLeaderboard() {
-  if (!fs.existsSync(LEADERBOARD_FILE)) return [];
+function readVotes() {
+  if (!fs.existsSync(VOTES_FILE)) return {};
   try {
-    return JSON.parse(fs.readFileSync(LEADERBOARD_FILE, 'utf8'));
+    return JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
   } catch {
-    return [];
+    return {};
   }
 }
 
-function writeLeaderboard(data) {
-  fs.writeFileSync(LEADERBOARD_FILE, JSON.stringify(data, null, 2));
-}
-
-app.get('/api/leaderboard', (req, res) => {
-  const board = readLeaderboard();
-  res.json(board.slice(0, 20));
+app.get('/api/votes', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(toVoteList(readVotes()));
 });
 
-app.post('/api/score', (req, res) => {
-  if (!tokenOK(req.headers['x-score-token'])) {
+app.post('/api/vote', (req, res) => {
+  if (!tokenOK(req.headers['x-vote-token'])) {
     return res.status(401).send('fuck off');
   }
 
-  const { username, score } = req.body;
-  if (!username || typeof score !== 'number') {
-    return res.status(400).json({ error: 'Invalid payload' });
-  }
+  const vote = parseVote(req.body);
+  if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  const board = readLeaderboard();
-  const existing = board.find(e => e.username === username);
-  if (existing) {
-    if (score > existing.score) {
-      existing.score = score;
-      existing.date = new Date().toISOString();
-    }
-  } else {
-    board.push({ username, score, date: new Date().toISOString() });
-  }
-
-  board.sort((a, b) => b.score - a.score);
-  writeLeaderboard(board);
-
-  // Joint placing: rank is the number of players with a strictly higher score
-  // + 1, so tied players share the same rank.
-  const best = board.find(e => e.username === username).score;
-  const rank = board.filter(e => e.score > best).length + 1;
-  res.json({ rank });
+  // One vote each: voting again replaces your previous choice.
+  const { username, country, weekend } = vote;
+  const votes = readVotes();
+  votes[username] = { country, weekend, at: new Date().toISOString() };
+  fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2));
+  res.json({ ok: true });
 });
 
-app.listen(PORT, () => console.log(`Flappy Stag running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Flappy Holiday running on http://localhost:${PORT}`));

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flappy Stag</title>
+  <title>Flappy Holiday</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,23 +11,31 @@
   <!-- Username modal -->
   <div id="username-modal" class="modal">
     <div class="modal-box">
-      <h2>Welcome to Flappy Stag!</h2>
-      <p>Enter your name to track your score on the leaderboard:</p>
+      <h2>Welcome to Flappy Holiday!</h2>
+      <p>Enter your name so your vote counts:</p>
       <input type="text" id="username-input" placeholder="Your name" maxlength="20" autocomplete="off">
       <button id="username-btn">Let's Go!</button>
     </div>
   </div>
 
-  <!-- Leaderboard panel -->
-  <div id="leaderboard-panel" class="panel hidden">
-    <h3>Leaderboard</h3>
-    <ol id="leaderboard-list"></ol>
-    <button id="close-leaderboard">Play Again</button>
+  <!-- Results panel -->
+  <div id="results-panel" class="panel hidden">
+    <div class="panel-box">
+      <h3>Holiday Votes</h3>
+      <p id="results-leader"></p>
+      <h4>Destinations</h4>
+      <ul id="results-countries" class="bars"></ul>
+      <h4>Weekends</h4>
+      <ul id="results-weekends" class="bars"></ul>
+      <h4>Who voted</h4>
+      <ul id="results-voters"></ul>
+      <button id="close-results">Back</button>
+    </div>
   </div>
 
   <div id="ui">
     <span id="player-name"></span>
-    <button id="show-leaderboard-btn">Leaderboard</button>
+    <button id="show-results-btn">Results</button>
   </div>
 
   <button id="mute-btn" type="button" aria-label="Mute sound" aria-pressed="false">🔊</button>
@@ -35,19 +43,28 @@
   <canvas id="game-canvas"></canvas>
 
   <div id="start-screen">
-    <h1>Flappy Stag</h1>
+    <h1>Flappy Holiday</h1>
+    <p>Vote by crashing into a pillar</p>
     <p>Press <strong>Space</strong> or <strong>Tap</strong> to flap</p>
-    <p id="best-score-display"></p>
+    <p id="my-vote-display"></p>
   </div>
 
   <div id="game-over-screen" class="hidden">
-    <h2>Game Over</h2>
-    <p>Score: <span id="final-score">0</span></p>
-    <p id="rank-display"></p>
-    <button id="restart-btn">Play Again</button>
-    <button id="leaderboard-btn">Leaderboard</button>
+    <h2 id="crash-title">Crashed!</h2>
+    <p id="crash-sub"></p>
+    <div id="crash-card" class="hidden">
+      <span id="crash-country"></span>
+      <span id="crash-weekend"></span>
+    </div>
+    <p id="vote-status"></p>
+    <div class="btn-row">
+      <button id="vote-btn">Vote for this</button>
+      <button id="restart-btn">Try again</button>
+    </div>
+    <button id="results-btn">Results</button>
   </div>
 
+  <script src="shapes.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

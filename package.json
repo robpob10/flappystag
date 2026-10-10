@@ -1,7 +1,7 @@
 {
   "name": "flappystag",
   "version": "1.0.0",
-  "description": "Flappy Bird clone with leaderboard",
+  "description": "Flappy Bird clone for voting on the group holiday",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -9,9 +9,9 @@ function sign(data) {
   return crypto.createHmac('sha256', SECRET).update(data).digest('hex');
 }
 
-// Issues a short-lived, signed, single-use token that /api/score requires.
-// The game fetches one right before submitting a score; a raw curl to
-// /api/score without a valid token is rejected.
+// Issues a short-lived, signed, single-use token that /api/vote requires.
+// The game fetches one right before submitting a vote; a raw curl to
+// /api/vote without a valid token is rejected.
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
   const exp = Date.now() + TTL_MS;

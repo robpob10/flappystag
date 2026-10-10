@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
+const { VOTES_KEY, parseVote } = require('./_holiday');
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -18,8 +19,8 @@ function safeEq(a, b) {
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
 }
 
-// A score is only accepted with a token from /api/token that is correctly
-// signed, unexpired, and not already used. This stops scores being POSTed
+// A vote is only accepted with a token from /api/token that is correctly
+// signed, unexpired, and not already used. This stops votes being POSTed
 // directly (e.g. via curl) without going through the game.
 async function tokenOK(token) {
   if (typeof token !== 'string') return false;
@@ -35,36 +36,27 @@ async function tokenOK(token) {
     const claimed = await redis.set(`usedtok:${nonce}`, 1, { nx: true, ex: 200 });
     return claimed !== null;
   } catch {
-    return true; // Redis hiccup: signature + expiry already validated, don't block real players
+    return true; // Redis hiccup: signature + expiry already validated, don't block real voters
   }
 }
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  if (!(await tokenOK(req.headers['x-score-token']))) {
+  if (!(await tokenOK(req.headers['x-vote-token']))) {
     return res.status(401).send('fuck off');
   }
 
-  const { username, score } = req.body;
-  if (!username || typeof score !== 'number') {
-    return res.status(400).json({ error: 'Invalid payload' });
-  }
+  const vote = parseVote(req.body);
+  if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
   try {
-    const current = await redis.zscore('leaderboard', username);
-    if (current === null || score > current) {
-      await redis.zadd('leaderboard', { score, member: username });
-    }
-
-    // Joint placing: everyone with the same score shares the same rank, so a
-    // player's rank is the number of players with a STRICTLY higher score + 1
-    // (rather than zrevrank, which breaks ties by member and gives 1,2,3,4).
-    const best = await redis.zscore('leaderboard', username);
-    const higher = await redis.zcount('leaderboard', `(${best}`, '+inf');
-    res.json({ rank: higher + 1 });
+    // One vote each: voting again replaces your previous choice.
+    const { username, country, weekend } = vote;
+    await redis.hset(VOTES_KEY, { [username]: { country, weekend, at: new Date().toISOString() } });
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to save score' });
+    res.status(500).json({ error: 'Failed to save vote' });
   }
 };

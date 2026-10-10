@@ -37,7 +37,7 @@ body {
   font-size: 14px;
 }
 
-#show-leaderboard-btn {
+#show-results-btn {
   background: #f5a623;
   border: none;
   border-radius: 20px;
@@ -47,7 +47,7 @@ body {
   font-weight: bold;
 }
 
-#show-leaderboard-btn:hover { background: #e09510; }
+#show-results-btn:hover { background: #e09510; }
 
 /* Mute toggle — top right */
 #mute-btn {
@@ -111,7 +111,7 @@ body {
 
 .modal-box input:focus { border-color: #f5a623; }
 
-.modal-box button, #restart-btn, #leaderboard-btn, #close-leaderboard {
+.modal-box button, #vote-btn, #restart-btn, #results-btn, #close-results {
   background: #f5a623;
   border: none;
   border-radius: 10px;
@@ -122,9 +122,13 @@ body {
   color: #333;
 }
 
-.modal-box button:hover, #restart-btn:hover, #leaderboard-btn:hover, #close-leaderboard:hover {
+.modal-box button:hover, #vote-btn:hover, #restart-btn:hover, #results-btn:hover, #close-results:hover {
   background: #e09510;
 }
+
+#vote-btn { background: #4caf50; color: #fff; }
+#vote-btn:hover { background: #388e3c; }
+#vote-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Overlay screens */
 #start-screen, #game-over-screen {
@@ -141,7 +145,7 @@ body {
   z-index: 5;
 }
 
-#game-over-screen { pointer-events: all; }
+#game-over-screen { pointer-events: all; background: rgba(0,0,0,0.35); }
 
 #start-screen h1 {
   font-size: 52px;
@@ -155,7 +159,26 @@ body {
   text-shadow: 2px 2px 0 #8b0000;
 }
 
-#game-over-screen p { font-size: 20px; }
+#game-over-screen p { font-size: 20px; max-width: 340px; text-align: center; }
+#start-screen p { max-width: 340px; text-align: center; }
+#my-vote-display { color: #ffe44d; font-weight: bold; }
+
+/* What the bird just crashed into */
+#crash-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 22px;
+  border-radius: 14px;
+  border: 3px solid rgba(0,0,0,0.35);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  text-shadow: none;
+}
+
+#crash-country { font-size: 30px; font-weight: bold; }
+#crash-weekend { font-size: 17px; }
+#vote-status { font-size: 16px !important; min-height: 1.2em; }
 
 #game-over-screen .btn-row {
   display: flex;
@@ -165,46 +188,77 @@ body {
 
 .hidden { display: none !important; }
 
-/* Leaderboard panel */
+/* Results panel */
 .panel {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.7);
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 50;
   color: #fff;
 }
 
+.panel-box {
+  background: rgba(30,30,30,0.85);
+  border-radius: 16px;
+  padding: 20px 24px;
+  width: min(380px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  text-align: center;
+}
+
 .panel h3 {
-  font-size: 32px;
-  margin-bottom: 16px;
+  font-size: 30px;
+  margin-bottom: 8px;
   color: #ffe44d;
   text-shadow: 2px 2px 0 #c8960a;
 }
 
-#leaderboard-list {
-  background: rgba(255,255,255,0.1);
-  border-radius: 12px;
-  padding: 16px 24px;
-  min-width: 280px;
-  max-height: 50vh;
-  overflow-y: auto;
-  list-style-position: inside;
+.panel h4 {
+  margin: 16px 0 6px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #bbb;
+  text-align: left;
 }
 
-#leaderboard-list li {
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.2);
-  font-size: 18px;
+#results-leader { font-size: 17px; }
+
+.panel ul { list-style: none; text-align: left; }
+
+.bars li {
+  display: grid;
+  grid-template-columns: 112px 1fr 24px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 15px;
+}
+
+.bars .bar {
+  height: 14px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.12);
+  overflow: hidden;
+}
+
+.bars .bar span { display: block; height: 100%; border-radius: 7px; background: #f5a623; }
+.bars .count { text-align: right; font-weight: bold; }
+
+#results-voters li {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  font-size: 15px;
 }
 
-#leaderboard-list li:last-child { border-bottom: none; }
-#leaderboard-list li.me { color: #ffe44d; font-weight: bold; }
+#results-voters li:last-child { border-bottom: none; }
+#results-voters li.me { color: #ffe44d; font-weight: bold; }
 
-#close-leaderboard { margin-top: 20px; }
+#close-results { margin-top: 18px; }
