@@ -288,6 +288,7 @@ function initGame() {
   score   = 0;
   frame   = 0;
   crashed = null;
+  deck    = shuffledDeck();
   gameState = 'waiting';
 
   renderMyVotes();
@@ -331,8 +332,25 @@ showResultsBtn.addEventListener('click', showResults);
 closeResults.addEventListener('click', () => resultsPanel.classList.add('hidden'));
 
 // ── Pillar logic ──────────────────────────────────────────────────────────────
-function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
+// Every country + weekend combo, shuffled. Pillars are dealt from it two at a
+// time, so every combo turns up before any repeats, in a different random
+// order each game; it's reshuffled whenever it runs out.
+let deck = [];
+
+function shuffledDeck() {
+  const d = [];
+  for (const country of COUNTRIES) for (const weekend of WEEKENDS) d.push({ country, weekend });
+  for (let i = d.length - 1; i > 0; i--) {  // Fisher–Yates
+    const j = Math.floor(Math.random() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+
+// Two different combos for one gap's top and bottom pillars.
+function dealPair() {
+  if (deck.length < 2) deck = shuffledDeck();
+  return [deck.pop(), deck.pop()];
 }
 
 // Lays out one pillar in its column's local coordinates (x from the column's
@@ -372,12 +390,7 @@ function spawnPipe() {
   const topH = Math.random() * (maxY - minY) + minY;
   const gapBottom = topH + CFG.pipeGap;
 
-  // Random country + weekend for each pillar; never the same pair twice.
-  const top = { country: pick(COUNTRIES), weekend: pick(WEEKENDS) };
-  let bottom;
-  do {
-    bottom = { country: pick(COUNTRIES), weekend: pick(WEEKENDS) };
-  } while (bottom.country === top.country && bottom.weekend === top.weekend);
+  const [top, bottom] = dealPair();
 
   pipes.push({
     x: CFG.width,
