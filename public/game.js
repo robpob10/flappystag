@@ -18,8 +18,8 @@ const CFG = {
 
 // ── Asset paths (swap these to change sprites) ────────────────────────────────
 const ASSETS = {
-  birdUp:   'assets/bird.png',
-  birdDown: 'assets/bird.png',
+  birdUp:   'assets/bird_up.png',
+  birdDown: 'assets/bird_down.png',
 };
 
 // ── Holiday ballot ────────────────────────────────────────────────────────────
