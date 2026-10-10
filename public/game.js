@@ -649,7 +649,10 @@ function drawBird() {
   const goingUp = bird.vy < 0;
   const sprite  = goingUp ? (birdUpLoaded ? imgBirdUp : null) : (birdDownLoaded ? imgBirdDown : null);
   if (sprite) {
-    ctx.drawImage(sprite, -CFG.birdW / 2, -CFG.birdH / 2, CFG.birdW, CFG.birdH);
+    // Sprites are drawn birdW wide with their bottom square over the hitbox;
+    // anything taller (the fez) pokes out above and never collides.
+    const h = CFG.birdW * sprite.naturalHeight / sprite.naturalWidth;
+    ctx.drawImage(sprite, -CFG.birdW / 2, CFG.birdH / 2 - h, CFG.birdW, h);
   } else {
     // fallback: yellow circle bird
     ctx.beginPath();
