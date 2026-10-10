@@ -2,11 +2,11 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { parseVote, voteField, toVoteList } = require('./api/_holiday');
+const { parseVote, voteMember, toScoreList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const VOTES_FILE = path.join(__dirname, 'votes.json');
+const SCORES_FILE = path.join(__dirname, 'scores.json');
 
 const SECRET = process.env.SCORE_SECRET || process.env.KV_REST_API_TOKEN || 'flappy-dev-secret';
 const TTL_MS = 120000;
@@ -48,10 +48,11 @@ app.get('/api/token', (req, res) => {
   res.json({ token: `${payload}.${sign(payload)}` });
 });
 
-function readVotes() {
-  if (!fs.existsSync(VOTES_FILE)) return {};
+// member "country|weekend|username" -> best score (mirrors the Redis sorted set)
+function readScores() {
+  if (!fs.existsSync(SCORES_FILE)) return {};
   try {
-    return JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
+    return JSON.parse(fs.readFileSync(SCORES_FILE, 'utf8'));
   } catch {
     return {};
   }
@@ -59,7 +60,7 @@ function readVotes() {
 
 app.get('/api/votes', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json(toVoteList(readVotes()));
+  res.json(toScoreList(Object.entries(readScores())));
 });
 
 app.post('/api/vote', (req, res) => {
@@ -70,15 +71,15 @@ app.post('/api/vote', (req, res) => {
   const vote = parseVote(req.body);
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  // One vote per person per combo: a repeat leaves the original in place.
-  const votes = readVotes();
-  const field = voteField(vote);
-  const already = field in votes;
-  if (!already) {
-    votes[field] = { ...vote, at: new Date().toISOString() };
-    fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2));
+  // Your score is how many votes you give this combo; only your best counts.
+  const scores = readScores();
+  const member = voteMember(vote);
+  const improved = !(scores[member] >= vote.score);
+  if (improved) {
+    scores[member] = vote.score;
+    fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2));
   }
-  res.json({ ok: true, already });
+  res.json({ ok: true, improved, best: scores[member] });
 });
 
 app.listen(PORT, () => console.log(`Flappy Holiday running on http://localhost:${PORT}`));

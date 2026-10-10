@@ -1,5 +1,5 @@
 const { Redis } = require('@upstash/redis');
-const { VOTES_KEY, LEGACY_KEYS, toVoteList } = require('./_holiday');
+const { SCORES_KEY, OLD_VOTES_KEY, LEGACY_KEYS, toScoreList } = require('./_holiday');
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -24,9 +24,14 @@ module.exports = async function handler(req, res) {
 
   await clearLegacy();
   try {
-    const map = await redis.hgetall(VOTES_KEY);
+    const [flat, oldVotes] = await Promise.all([
+      redis.zrange(SCORES_KEY, 0, -1, { withScores: true }),  // [member, score, ...]
+      redis.hgetall(OLD_VOTES_KEY),
+    ]);
+    const pairs = [];
+    for (let i = 0; i < flat.length; i += 2) pairs.push([flat[i], flat[i + 1]]);
     res.setHeader('Cache-Control', 'no-store');
-    res.json(toVoteList(map));
+    res.json(toScoreList(pairs, oldVotes));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load votes' });

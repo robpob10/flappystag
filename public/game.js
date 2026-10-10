@@ -183,7 +183,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVotes = new Set();  // "country|weekend" combos this player has voted for
+let myVotes = new Map();  // "country|weekend" -> this player's best score for it
 // Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
@@ -191,7 +191,7 @@ localStorage.removeItem('holiday_vote');
 
 let bird, pipes, score, frame, gameState, animFrame;
 // gameState: 'waiting' | 'playing' | 'dead'
-let crashed = null;  // { country, weekend } of the pillar hit this round, if any
+let crashed = null;  // { country, weekend, score } of the pillar hit this round, if any
 
 // ── Canvas setup ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -298,10 +298,13 @@ function initGame() {
 }
 
 const comboKey = v => `${v.country}|${v.weekend}`;
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function renderMyVotes() {
-  myVoteDisplay.textContent = myVotes.size
-    ? `You've voted for ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} trips. Crash into more to add them!`
+  let total = 0;
+  for (const s of myVotes.values()) total += s;
+  myVoteDisplay.textContent = total
+    ? `You've given ${plural(total, 'vote')} across ${plural(myVotes.size, 'trip')}`
     : '';
 }
 
@@ -465,10 +468,10 @@ async function submitVote(vote) {
     const res = await fetch('/api/vote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-vote-token': token },
-      body: JSON.stringify({ username, country: vote.country, weekend: vote.weekend }),
+      body: JSON.stringify({ username, country: vote.country, weekend: vote.weekend, score: vote.score }),
     });
     if (!res.ok) return null;
-    return await res.json();  // { ok, already }
+    return await res.json();  // { ok, improved, best }
   } catch {
     return null;  // offline / network error: nothing was recorded server-side
   }
@@ -486,7 +489,7 @@ async function fetchVotes() {
 
 function countMyVotes(votes) {
   if (!username) return;
-  myVotes = new Set(votes.filter(v => v.username === username).map(comboKey));
+  myVotes = new Map(votes.filter(v => v.username === username).map(v => [comboKey(v), v.score]));
   renderMyVotes();
 }
 
@@ -504,15 +507,15 @@ async function castVote() {
   voteBtn.textContent = 'Saving…';
   const result = await submitVote(vote);
   voteBtn.disabled = false;
-  voteBtn.textContent = 'Vote for this';
+  voteBtn.textContent = `Give it ${plural(vote.score, 'vote')}`;
   if (result) {
-    // You can back as many trips as you like, but each one only once.
-    myVotes.add(comboKey(vote));
+    // Only your best score for each trip counts.
+    myVotes.set(comboKey(vote), result.best);
     renderMyVotes();
     voteBtn.classList.add('hidden');
-    voteStatus.textContent = result.already
-      ? "You've already voted for this one 👍"
-      : 'Vote saved! 🎉 Crash into other trips to vote for them too.';
+    voteStatus.textContent = result.improved
+      ? `Saved! 🎉 This trip now has ${plural(result.best, 'vote')} from you.`
+      : `You've already given this one ${plural(result.best, 'vote')}. Score higher to add more.`;
   } else {
     voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
   }
@@ -536,12 +539,13 @@ function barRow(label, count, max) {
 }
 
 function renderResults(votes) {
+  // Each entry is one person's best score for one trip: that's their votes.
   const byCountry = {}, byWeekend = {}, byCombo = {};
   for (const v of votes) {
-    byCountry[v.country] = (byCountry[v.country] || 0) + 1;
-    byWeekend[v.weekend] = (byWeekend[v.weekend] || 0) + 1;
-    const key = `${v.country}|${v.weekend}`;
-    byCombo[key] = (byCombo[key] || 0) + 1;
+    byCountry[v.country] = (byCountry[v.country] || 0) + v.score;
+    byWeekend[v.weekend] = (byWeekend[v.weekend] || 0) + v.score;
+    const key = comboKey(v);
+    byCombo[key] = (byCombo[key] || 0) + v.score;
   }
 
   if (!votes.length) {
@@ -552,13 +556,11 @@ function renderResults(votes) {
       const [country, weekend] = k.split('|');
       return voteLabel({ country, weekend });
     });
-    // Each person can vote for a trip once, so a trip's count is how many
-    // people are up for it.
+    const total = votes.reduce((n, v) => n + v.score, 0);
     const people = new Set(votes.map(v => v.username)).size;
-    const peopleLabel = n => `${n} ${n === 1 ? 'person' : 'people'}`;
     resultsLeader.textContent = leaders.length === 1
-      ? `Leading: ${leaders[0]} (${top} of ${peopleLabel(people)})`
-      : `${peopleLabel(people)} voted. No single favourite yet.`;
+      ? `Leading: ${leaders[0]} (${plural(top, 'vote')})`
+      : `${plural(total, 'vote')} from ${people} ${people === 1 ? 'person' : 'people'}. No single favourite yet.`;
   }
 
   const maxC = Math.max(0, ...Object.values(byCountry));
@@ -569,12 +571,12 @@ function renderResults(votes) {
   resultsWeekends.replaceChildren(...WEEKENDS.map(w =>
     barRow(weekendLabel(w) + (w === EASTER_WEEKEND ? ' 🐣' : ''), byWeekend[w] || 0, maxW)));
 
-  // Everyone can vote as often as they like: show each person's tally by country.
+  // Each person's votes in total, split by country.
   const byVoter = {};
   for (const v of votes) {
     const t = byVoter[v.username] || (byVoter[v.username] = { total: 0 });
-    t.total++;
-    t[v.country] = (t[v.country] || 0) + 1;
+    t.total += v.score;
+    t[v.country] = (t[v.country] || 0) + v.score;
   }
   const voters = Object.keys(byVoter).sort((a, b) => byVoter[b].total - byVoter[a].total || a.localeCompare(b));
   resultsVoters.replaceChildren(...voters.map(name => {
@@ -758,11 +760,10 @@ function die(hit) {
 
   voteStatus.textContent = '';
   voteBtn.disabled = false;
-  voteBtn.textContent = 'Vote for this';
 
   if (typeof hit === 'object') {
-    // Crashed into a pillar: offer it as this player's vote.
-    crashed = { country: hit.country.id, weekend: hit.weekend };
+    // Crashed into a pillar: offer this run's score as votes for it.
+    crashed = { country: hit.country.id, weekend: hit.weekend, score };
     crashTitle.textContent = 'Crashed!';
     crashSub.textContent = 'You flew straight into';
     crashCountry.textContent = `${hit.country.flag} ${hit.country.name}`;
@@ -770,9 +771,17 @@ function die(hit) {
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    const already = myVotes.has(comboKey(crashed));
-    voteBtn.classList.toggle('hidden', already);
-    if (already) voteStatus.textContent = "You've already voted for this one 👍";
+    // Only your best score per trip counts, so only offer a vote that beats it.
+    const prev = myVotes.get(comboKey(crashed)) || 0;
+    voteBtn.textContent = `Give it ${plural(score, 'vote')}`;
+    voteBtn.classList.toggle('hidden', score <= prev);
+    if (score === 0) {
+      voteStatus.textContent = 'You scored 0, so no votes to give. Fly through some pillars first!';
+    } else if (score <= prev) {
+      voteStatus.textContent = `You've already given this one ${plural(prev, 'vote')}. Score higher to add more.`;
+    } else if (prev) {
+      voteStatus.textContent = `That beats the ${plural(prev, 'vote')} you gave it before.`;
+    }
   } else {
     crashed = null;
     crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';
