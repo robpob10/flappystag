@@ -29,7 +29,6 @@ const ASSETS = {
 const COUNTRIES = [
   { id: 'tunisia', name: 'Tunisia', flag: '🇹🇳', fill: '#e4312b', edge: '#8f1712', ink: '#fff' },
   { id: 'morocco', name: 'Morocco', flag: '🇲🇦', fill: '#1f8a4c', edge: '#0f5130', ink: '#fff' },
-  { id: 'spain',   name: 'Spain',   flag: '🇪🇸', fill: '#f6c21c', edge: '#a87c00', ink: '#3b2a00' },
 ];
 const COUNTRY_BY_ID = Object.fromEntries(COUNTRIES.map(c => [c.id, c]));
 
@@ -184,11 +183,11 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVote = null;   // { country, weekend } this player last voted for
-try { myVote = JSON.parse(localStorage.getItem('holiday_vote')); } catch { /* none */ }
-// Old Flappy Stag high-score keys are no longer used.
+let myVoteCount = 0;  // votes this player has cast (refreshed from the server)
+// Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
+localStorage.removeItem('holiday_vote');
 
 let bird, pipes, score, frame, gameState, animFrame;
 // gameState: 'waiting' | 'playing' | 'dead'
@@ -274,7 +273,7 @@ function confirmUsername() {
   localStorage.setItem('flappy_username', username);
   playerNameEl.textContent = username;
   usernameModal.classList.add('hidden');
-  syncMyVote();
+  syncMyVotes();
 }
 
 // ── Game init ─────────────────────────────────────────────────────────────────
@@ -291,14 +290,16 @@ function initGame() {
   crashed = null;
   gameState = 'waiting';
 
-  renderMyVote();
+  renderMyVotes();
   startScreen.classList.remove('hidden');
   gameOverScreen.classList.add('hidden');
   resultsPanel.classList.add('hidden');
 }
 
-function renderMyVote() {
-  myVoteDisplay.textContent = myVote ? `Your vote: ${voteLabel(myVote)}` : '';
+function renderMyVotes() {
+  myVoteDisplay.textContent = myVoteCount
+    ? `You've voted ${myVoteCount} time${myVoteCount === 1 ? '' : 's'} — keep going!`
+    : '';
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -467,20 +468,16 @@ async function fetchVotes() {
   }
 }
 
-function saveMyVote(vote) {
-  myVote = vote;
-  if (vote) localStorage.setItem('holiday_vote', JSON.stringify(vote));
-  else localStorage.removeItem('holiday_vote');
-  renderMyVote();
+function countMyVotes(votes) {
+  if (!username) return;
+  myVoteCount = votes.filter(v => v.username === username).length;
+  renderMyVotes();
 }
 
-// The server is the source of truth for this player's vote.
-async function syncMyVote() {
+async function syncMyVotes() {
   if (!username) return;
   const votes = await fetchVotes();
-  if (!votes) return;  // offline — keep the cached one
-  const mine = votes.find(v => v.username === username);
-  saveMyVote(mine ? { country: mine.country, weekend: mine.weekend } : null);
+  if (votes) countMyVotes(votes);
 }
 
 async function castVote() {
@@ -493,9 +490,11 @@ async function castVote() {
   voteBtn.disabled = false;
   voteBtn.textContent = 'Vote for this';
   if (ok) {
-    saveMyVote(vote);
+    // One vote per crash — crash again to vote again.
+    myVoteCount++;
+    renderMyVotes();
     voteBtn.classList.add('hidden');
-    voteStatus.textContent = 'Vote saved! 🎉';
+    voteStatus.textContent = 'Vote saved! 🎉 Crash again to vote again.';
   } else {
     voteStatus.textContent = "Couldn't save your vote — check your connection and try again.";
   }
@@ -549,14 +548,23 @@ function renderResults(votes) {
   resultsWeekends.replaceChildren(...WEEKENDS.map(w =>
     barRow(weekendLabel(w) + (w === EASTER_WEEKEND ? ' 🐣' : ''), byWeekend[w] || 0, maxW)));
 
-  resultsVoters.replaceChildren(...votes.map(v => {
+  // Everyone can vote as often as they like: show each person's tally by country.
+  const byVoter = {};
+  for (const v of votes) {
+    const t = byVoter[v.username] || (byVoter[v.username] = { total: 0 });
+    t.total++;
+    t[v.country] = (t[v.country] || 0) + 1;
+  }
+  const voters = Object.keys(byVoter).sort((a, b) => byVoter[b].total - byVoter[a].total || a.localeCompare(b));
+  resultsVoters.replaceChildren(...voters.map(name => {
+    const t = byVoter[name];
     const li = document.createElement('li');
     const who = document.createElement('span');
-    who.textContent = v.username;
+    who.textContent = `${name} (${t.total})`;
     const what = document.createElement('span');
-    what.textContent = voteLabel(v);
+    what.textContent = COUNTRIES.filter(c => t[c.id]).map(c => `${c.flag} ${t[c.id]}`).join('  ');
     li.append(who, what);
-    if (v.username === username) li.classList.add('me');
+    if (name === username) li.classList.add('me');
     return li;
   }));
   if (!votes.length) {
@@ -578,9 +586,7 @@ async function showResults() {
     return;
   }
   renderResults(votes);
-  // keep "Your vote" in step with the server
-  const mine = votes.find(v => v.username === username);
-  if (username) saveMyVote(mine ? { country: mine.country, weekend: mine.weekend } : null);
+  countMyVotes(votes);
 }
 
 // ── Draw helpers ──────────────────────────────────────────────────────────────
@@ -743,10 +749,7 @@ function die(hit) {
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    const same = myVote && myVote.country === crashed.country && myVote.weekend === crashed.weekend;
-    voteBtn.classList.toggle('hidden', !!same);
-    if (same) voteStatus.textContent = "That's already your vote 👍";
-    else if (myVote) voteStatus.textContent = `Voting replaces your current vote (${voteLabel(myVote)})`;
+    voteBtn.classList.remove('hidden');
   } else {
     crashed = null;
     crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';
@@ -803,4 +806,4 @@ function startLoop() {
 initUsername();
 initGame();
 startLoop();
-syncMyVote();  // pick up this player's vote from the server
+syncMyVotes();  // pick up this player's vote count from the server

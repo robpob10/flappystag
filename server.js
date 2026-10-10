@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { parseVote, toVoteList } = require('./api/_holiday');
+const { parseVote, newVoteId, toVoteList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,10 +70,9 @@ app.post('/api/vote', (req, res) => {
   const vote = parseVote(req.body);
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  // One vote each: voting again replaces your previous choice.
-  const { username, country, weekend } = vote;
+  // Unlimited votes: every vote is its own entry.
   const votes = readVotes();
-  votes[username] = { country, weekend, at: new Date().toISOString() };
+  votes[newVoteId()] = { ...vote, at: new Date().toISOString() };
   fs.writeFileSync(VOTES_FILE, JSON.stringify(votes, null, 2));
   res.json({ ok: true });
 });
