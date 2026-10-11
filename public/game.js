@@ -520,6 +520,8 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
+const NEXT_ROUND_MS = 1200;  // time to read the vote confirmation
+
 // One vote per person per option, up or down; voting again switches it.
 async function castVote(dir) {
   if (!crashed) return;
@@ -534,9 +536,14 @@ async function castVote(dir) {
     myVotes.set(comboKey(vote), dir);
     renderMyVotes();
     voteRow.classList.add('hidden');
-    if (prev) voteStatus.textContent = `Switched to ${dir === 'up' ? 'an upvote 👍' : 'a downvote 👎'}`;
+    if (prev === dir) voteStatus.textContent = `Kept your ${dir === 'up' ? 'upvote 👍' : 'downvote 👎'}`;
+    else if (prev) voteStatus.textContent = `Switched to ${dir === 'up' ? 'an upvote 👍' : 'a downvote 👎'}`;
     else if (votedOnAll()) voteStatus.textContent = `${dir === 'up' ? 'Upvoted!' : 'Downvoted!'} That's all ${TOTAL_OPTIONS} options done 🎉`;
-    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} It's out of your pool now. Crash into the others!`;
+    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} It's out of your pool now.`;
+    // There's no Try again after a pillar crash: voting starts the next round.
+    setTimeout(() => {
+      if (gameState === 'dead') { initGame(); startLoop(); }
+    }, NEXT_ROUND_MS);
   } else {
     voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
   }
@@ -798,20 +805,21 @@ function die(hit) {
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    // One vote per option: if you've voted on this one, offer to switch it.
+    // Voting is the only way on (no Try again). Voted options are normally out
+    // of your pool, but if one slips through, offer to keep or switch it.
     const mine = myVotes.get(comboKey(crashed));
-    upBtn.textContent = mine === 'down' ? '👍 Switch to upvote' : '👍 Upvote';
-    downBtn.textContent = mine === 'up' ? '👎 Switch to downvote' : '👎 Downvote';
-    upBtn.classList.toggle('hidden', mine === 'up');
-    downBtn.classList.toggle('hidden', mine === 'down');
+    upBtn.textContent = mine === 'up' ? '👍 Keep upvote' : mine ? '👍 Switch to upvote' : '👍 Upvote';
+    downBtn.textContent = mine === 'down' ? '👎 Keep downvote' : mine ? '👎 Switch to downvote' : '👎 Downvote';
     voteRow.classList.remove('hidden');
-    if (mine) voteStatus.textContent = `You've already ${mine === 'up' ? 'upvoted' : 'downvoted'} this one. Changed your mind?`;
+    restartBtn.classList.add('hidden');
+    if (mine) voteStatus.textContent = `You've already ${mine === 'up' ? 'upvoted' : 'downvoted'} this one. Keep it or switch?`;
   } else {
     crashed = null;
     crashTitle.textContent = 'Fuck you';
     crashSub.textContent = '';
     crashCard.classList.add('hidden');
     voteRow.classList.add('hidden');
+    restartBtn.classList.remove('hidden');
   }
 
   gameOverScreen.classList.remove('hidden');
