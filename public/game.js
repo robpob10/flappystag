@@ -520,33 +520,26 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
-const NEXT_ROUND_MS = 1200;  // time to read the vote confirmation
-
 // One vote per person per option, up or down; voting again switches it.
-async function castVote(dir) {
+// Voting acts as Try again: the next round starts straight away and the vote
+// saves in the background.
+function castVote(dir) {
   if (!crashed) return;
   if (!username) { usernameModal.classList.remove('hidden'); return; }
   const vote = { ...crashed, dir };
-  const prev = myVotes.get(comboKey(vote));
-  upBtn.disabled = downBtn.disabled = true;
-  voteStatus.textContent = 'Saving…';
-  const ok = await submitVote(vote);
-  upBtn.disabled = downBtn.disabled = false;
-  if (ok) {
-    myVotes.set(comboKey(vote), dir);
+  const key = comboKey(vote);
+  const prev = myVotes.get(key);
+  myVotes.set(key, dir);  // out of the pool for the round that's starting
+  initGame();
+  startLoop();
+  submitVote(vote).then(ok => {
+    if (ok) return;
+    // Didn't save (offline?): put the option back and say so.
+    if (prev) myVotes.set(key, prev);
+    else myVotes.delete(key);
     renderMyVotes();
-    voteRow.classList.add('hidden');
-    if (prev === dir) voteStatus.textContent = `Kept your ${dir === 'up' ? 'upvote 👍' : 'downvote 👎'}`;
-    else if (prev) voteStatus.textContent = `Switched to ${dir === 'up' ? 'an upvote 👍' : 'a downvote 👎'}`;
-    else if (votedOnAll()) voteStatus.textContent = `${dir === 'up' ? 'Upvoted!' : 'Downvoted!'} That's all ${TOTAL_OPTIONS} options done 🎉`;
-    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} It's out of your pool now.`;
-    // There's no Try again after a pillar crash: voting starts the next round.
-    setTimeout(() => {
-      if (gameState === 'dead') { initGame(); startLoop(); }
-    }, NEXT_ROUND_MS);
-  } else {
-    voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
-  }
+    myVoteDisplay.textContent = "Your last vote didn't save (no connection?). That option will come up again.";
+  });
 }
 
 // ── Results ───────────────────────────────────────────────────────────────────
@@ -793,7 +786,6 @@ function die(hit) {
   playSound('die');
 
   voteStatus.textContent = '';
-  upBtn.disabled = downBtn.disabled = false;
 
   if (typeof hit === 'object') {
     // Crashed into a pillar: vote it up or down.
