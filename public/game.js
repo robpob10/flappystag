@@ -808,8 +808,8 @@ function die(hit) {
     if (mine) voteStatus.textContent = `You've already ${mine === 'up' ? 'upvoted' : 'downvoted'} this one. Changed your mind?`;
   } else {
     crashed = null;
-    crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';
-    crashSub.textContent = 'No vote. Crash into a country to vote for it.';
+    crashTitle.textContent = 'Fuck you';
+    crashSub.textContent = '';
     crashCard.classList.add('hidden');
     voteRow.classList.add('hidden');
   }
