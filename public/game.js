@@ -185,7 +185,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVotes = { up: 0, down: 0 };  // votes this player has cast
+let myVotes = new Map();  // "country|weekend" -> 'up' | 'down': this player's vote on each option
 // Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
@@ -305,9 +305,9 @@ const comboKey = v => `${v.country}|${v.weekend}`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function renderMyVotes() {
-  const total = myVotes.up + myVotes.down;
-  myVoteDisplay.textContent = total
-    ? `You've cast ${plural(total, 'vote')} (👍 ${myVotes.up} 👎 ${myVotes.down})`
+  const ups = [...myVotes.values()].filter(d => d === 'up').length;
+  myVoteDisplay.textContent = myVotes.size
+    ? `You've voted on ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} options (👍 ${ups} 👎 ${myVotes.size - ups})`
     : '';
 }
 
@@ -492,11 +492,9 @@ async function fetchVotes() {
 
 function countMyVotes(votes) {
   if (!username) return;
-  myVotes = { up: 0, down: 0 };
+  myVotes = new Map();
   for (const v of votes) {
-    if (v.username !== username) continue;
-    myVotes.up += v.up;
-    myVotes.down += v.down;
+    if (v.username === username) myVotes.set(comboKey(v), v.up ? 'up' : 'down');
   }
   renderMyVotes();
 }
@@ -507,22 +505,22 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
-// One vote per crash, up or down; vote as often as you like.
+// One vote per person per option, up or down; voting again switches it.
 async function castVote(dir) {
   if (!crashed) return;
   if (!username) { usernameModal.classList.remove('hidden'); return; }
   const vote = { ...crashed, dir };
+  const prev = myVotes.get(comboKey(vote));
   upBtn.disabled = downBtn.disabled = true;
   voteStatus.textContent = 'Saving…';
   const ok = await submitVote(vote);
   upBtn.disabled = downBtn.disabled = false;
   if (ok) {
-    myVotes[dir]++;
+    myVotes.set(comboKey(vote), dir);
     renderMyVotes();
     voteRow.classList.add('hidden');
-    voteStatus.textContent = dir === 'up'
-      ? 'Upvoted! 🎉 Crash again to vote again.'
-      : 'Downvoted 👎 Crash again to vote again.';
+    if (prev) voteStatus.textContent = `Switched to ${dir === 'up' ? 'an upvote 👍' : 'a downvote 👎'}`;
+    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} Crash into other pillars to vote on them too.`;
   } else {
     voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
   }
@@ -784,7 +782,14 @@ function die(hit) {
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
+    // One vote per option: if you've voted on this one, offer to switch it.
+    const mine = myVotes.get(comboKey(crashed));
+    upBtn.textContent = mine === 'down' ? '👍 Switch to upvote' : '👍 Upvote';
+    downBtn.textContent = mine === 'up' ? '👎 Switch to downvote' : '👎 Downvote';
+    upBtn.classList.toggle('hidden', mine === 'up');
+    downBtn.classList.toggle('hidden', mine === 'down');
     voteRow.classList.remove('hidden');
+    if (mine) voteStatus.textContent = `You've already ${mine === 'up' ? 'upvoted' : 'downvoted'} this one. Changed your mind?`;
   } else {
     crashed = null;
     crashTitle.textContent = hit === 'ground' ? 'Splat!' : 'Too high!';

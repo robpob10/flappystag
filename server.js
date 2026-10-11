@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { parseVote, tallyField, toVoteList } = require('./api/_holiday');
+const { parseVote, tallyField, opposite, toVoteList } = require('./api/_holiday');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -71,10 +71,10 @@ app.post('/api/vote', (req, res) => {
   const vote = parseVote(req.body);
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
-  // One vote per crash, up or down, as many times as you like.
+  // One vote per person per option: set this one, drop the opposite.
   const tally = readTally();
-  const field = tallyField(vote);
-  tally[field] = (tally[field] || 0) + 1;
+  tally[tallyField(vote)] = 1;
+  delete tally[tallyField({ ...vote, dir: opposite(vote.dir) })];
   fs.writeFileSync(TALLY_FILE, JSON.stringify(tally, null, 2));
   res.json({ ok: true });
 });

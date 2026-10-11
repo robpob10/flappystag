@@ -10,9 +10,9 @@ const WEEKENDS = [
   '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
 ];
 
-// Every crash is one vote, up or down, on the pillar you hit, and you can
-// vote as often as you like. Counts live in a hash:
-// "country|weekend|up|username" -> number of votes.
+// Each person gets one vote per option (country + weekend), up or down; voting
+// again switches it. Votes live in a hash: "country|weekend|up|username" -> 1,
+// and casting one removes that person's opposite field for the option.
 // (A fresh key: all results were reset to 0 on 11 Oct 2026.)
 const TALLY_KEY = 'holiday:tally2';
 const DIRS = ['up', 'down'];
@@ -31,11 +31,13 @@ function parseVote(body) {
   return { username: name, country, weekend, dir };
 }
 
-// Hash field for one person's up (or down) votes on one trip. Country, weekend
+// Hash field for one person's up (or down) vote on one trip. Country, weekend
 // and direction never contain "|", so everything after them is the username.
 function tallyField({ country, weekend, dir, username }) {
   return `${country}|${weekend}|${dir}|${username}`;
 }
+
+const opposite = dir => (dir === 'up' ? 'down' : 'up');
 
 const isOption = v => v && typeof v.username === 'string'
   && COUNTRIES.includes(v.country) && WEEKENDS.includes(v.weekend);
@@ -54,7 +56,7 @@ function toVoteList(tally) {
     const [country, weekend, dir, ...rest] = String(field).split('|');
     const v = { country, weekend, username: rest.join('|') };
     const count = Number(n);
-    if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] += count;
+    if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] = 1;  // one vote each
   }
 
   return [...rows.values()];
@@ -62,5 +64,5 @@ function toVoteList(tally) {
 
 module.exports = {
   COUNTRIES, WEEKENDS, TALLY_KEY, LEGACY_KEYS,
-  parseVote, tallyField, toVoteList,
+  parseVote, tallyField, opposite, toVoteList,
 };
