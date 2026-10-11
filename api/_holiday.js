@@ -13,14 +13,13 @@ const WEEKENDS = [
 // Every crash is one vote, up or down, on the pillar you hit, and you can
 // vote as often as you like. Counts live in a hash:
 // "country|weekend|up|username" -> number of votes.
-const TALLY_KEY = 'holiday:tally';
+// (A fresh key: all results were reset to 0 on 11 Oct 2026.)
+const TALLY_KEY = 'holiday:tally2';
 const DIRS = ['up', 'down'];
 
-// Votes from earlier versions (single votes, then best scores per trip). Each
-// person's vote on a trip there still counts as one upvote.
-const OLD_VOTES_KEY = 'holiday:votes';    // hash of { username, country, weekend }
-const OLD_SCORES_KEY = 'holiday:scores';  // sorted set of "country|weekend|username"
-const LEGACY_KEYS = ['leaderboard'];      // the old Flappy Stag high scores
+// Keys nothing uses any more, deleted by /api/votes: the old Flappy Stag high
+// scores and every earlier version's votes, cleared by the reset.
+const LEGACY_KEYS = ['leaderboard', 'holiday:votes', 'holiday:scores', 'holiday:tally'];
 
 // Validates a vote posted by the game; returns a clean vote or null.
 function parseVote(body) {
@@ -43,7 +42,7 @@ const isOption = v => v && typeof v.username === 'string'
 
 // One row per person per trip, { username, country, weekend, up, down },
 // dropping anything that isn't a current ballot option.
-function toVoteList(tally, oldScoreMembers, oldVotes) {
+function toVoteList(tally) {
   const rows = new Map();
   const row = v => {
     const key = `${v.country}|${v.weekend}|${v.username}`;
@@ -58,27 +57,10 @@ function toVoteList(tally, oldScoreMembers, oldVotes) {
     if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] += count;
   }
 
-  // Older votes: one upvote per person per trip, however they were stored.
-  const old = new Map();
-  for (const member of oldScoreMembers || []) {
-    const [country, weekend, ...rest] = String(member).split('|');
-    const v = { country, weekend, username: rest.join('|') };
-    if (isOption(v)) old.set(`${country}|${weekend}|${v.username}`, v);
-  }
-  for (const [field, raw] of Object.entries(oldVotes || {})) {
-    let v = raw;
-    if (typeof v === 'string') {
-      try { v = JSON.parse(v); } catch { continue; }
-    }
-    if (v && typeof v.username !== 'string') v = { ...v, username: field };  // keyed by name
-    if (isOption(v)) old.set(`${v.country}|${v.weekend}|${v.username}`, v);
-  }
-  for (const v of old.values()) row(v).up += 1;
-
   return [...rows.values()];
 }
 
 module.exports = {
-  COUNTRIES, WEEKENDS, TALLY_KEY, OLD_VOTES_KEY, OLD_SCORES_KEY, LEGACY_KEYS,
+  COUNTRIES, WEEKENDS, TALLY_KEY, LEGACY_KEYS,
   parseVote, tallyField, toVoteList,
 };
