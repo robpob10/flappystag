@@ -20,10 +20,28 @@ async function clearLegacy() {
   }
 }
 
+// One-off (11 Oct 2026): clear Rob's votes, as he asked. The marker key means
+// only the first request ever does it, so votes he casts afterwards are safe.
+let robCleared = false;
+async function clearRobOnce() {
+  if (robCleared) return;
+  try {
+    if (await redis.set('holiday:oneoff:clear-rob-2026-10-11', 1, { nx: true })) {
+      const tally = await redis.hgetall(TALLY_KEY);
+      const fields = Object.keys(tally || {}).filter(f => f.split('|').slice(3).join('|') === 'Rob');
+      if (fields.length) await redis.hdel(TALLY_KEY, ...fields);
+    }
+    robCleared = true;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
   await clearLegacy();
+  await clearRobOnce();
   try {
     const tally = await redis.hgetall(TALLY_KEY);
     res.setHeader('Cache-Control', 'no-store');
