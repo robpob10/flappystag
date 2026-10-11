@@ -310,7 +310,7 @@ const votedOnAll = () => myVotes.size >= TOTAL_OPTIONS;
 function renderMyVotes() {
   const ups = [...myVotes.values()].filter(d => d === 'up').length;
   myVoteDisplay.textContent = votedOnAll()
-    ? `You've voted on all ${TOTAL_OPTIONS} options! 🎉 Nothing left to crash into.`
+    ? `You've voted on all ${TOTAL_OPTIONS} options! 🎉 Nothing left but friends and holidays 👻`
     : myVotes.size
       ? `You've voted on ${myVotes.size} of ${TOTAL_OPTIONS} options (👍 ${ups} 👎 ${myVotes.size - ups})`
       : '';
@@ -366,7 +366,8 @@ function shuffledDeck() {
 }
 
 // Combos for one gap's top and bottom pillars: two different ones, the same
-// one twice if it's the last left, or null once everything's been voted on.
+// one twice if it's the last left, or null once everything's been voted on
+// (then the pillars are FRIEND / HOLIDAY).
 function dealPair() {
   deck = deck.filter(notVotedOn);  // drop anything voted on since the shuffle
   if (deck.length < 2) deck = shuffledDeck();
@@ -405,6 +406,29 @@ function makePillar(country, weekend, isTop, sectionY, sectionH) {
   return { country, weekend, label: weekendLabel(weekend), pts, path, stem, cx, cy };
 }
 
+// Once you've voted on everything, the pillars are just the words FRIEND (top)
+// and HOLIDAY (bottom), written down the pillar in a dripping Halloween font.
+// They're obstacles only: crashing into one isn't a vote.
+const SPOOKY_FONT = 'Creepster, Impact, fantasy';
+const SPOOKY_MAX_SIZE = 120;  // px; in practice the section's length decides
+
+function makeWordPillar(word, isTop, sectionY, sectionH) {
+  ctx.font = `100px ${SPOOKY_FONT}`;
+  const per100 = ctx.measureText(word).width;
+  const size = Math.min(SPOOKY_MAX_SIZE, ((sectionH - 6) * 100) / per100);
+  const len   = (per100 * size) / 100;  // along the pillar: the text runs top to bottom
+  const thick = size * 0.8;             // across it
+  const x0 = (CFG.pillarW - thick) / 2;
+  const y0 = isTop ? sectionY + sectionH - len : sectionY;  // hug the gap
+  return {
+    word, size,
+    pts: [x0, y0, x0 + thick, y0, x0 + thick, y0 + len, x0, y0 + len],  // hitbox
+    stem: null,
+    cx: CFG.pillarW / 2,
+    cy: y0 + len / 2,
+  };
+}
+
 function spawnPipe() {
   const groundTop = CFG.height - CFG.groundHeight;
   const minY = CFG.minPillarH;
@@ -413,14 +437,15 @@ function spawnPipe() {
   const gapBottom = topH + CFG.pipeGap;
 
   const pair = dealPair();
-  if (!pair) return;  // nothing left to vote on: empty sky
-  const [top, bottom] = pair;
+  const botH = groundTop - gapBottom;
 
   pipes.push({
     x: CFG.width,
     scored: false,
-    top:    makePillar(top.country, top.weekend, true, 0, topH),
-    bottom: makePillar(bottom.country, bottom.weekend, false, gapBottom, groundTop - gapBottom),
+    top:    pair ? makePillar(pair[0].country, pair[0].weekend, true, 0, topH)
+                 : makeWordPillar('FRIEND', true, 0, topH),
+    bottom: pair ? makePillar(pair[1].country, pair[1].weekend, false, gapBottom, botH)
+                 : makeWordPillar('HOLIDAY', false, gapBottom, botH),
   });
 }
 
@@ -657,7 +682,25 @@ function drawGround() {
   ctx.fillRect(0, CFG.height - CFG.groundHeight, CFG.width, 14);
 }
 
+function drawWordPillar(pl) {
+  ctx.save();
+  ctx.translate(pl.cx, pl.cy);
+  ctx.rotate(Math.PI / 2);  // reads top to bottom
+  ctx.font = `${pl.size}px ${SPOOKY_FONT}`;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(3, pl.size / 9);
+  ctx.strokeStyle = '#2a0a3a';
+  ctx.shadowColor = 'rgba(120, 255, 80, 0.9)';  // ghostly green glow
+  ctx.shadowBlur = 14;
+  ctx.strokeText(pl.word, 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff7518';  // pumpkin
+  ctx.fillText(pl.word, 0, 0);
+  ctx.restore();
+}
+
 function drawPillar(pl) {
+  if (pl.word) return drawWordPillar(pl);
   ctx.fillStyle   = pl.country.fill;
   ctx.strokeStyle = pl.country.edge;
   ctx.lineWidth   = 3;
@@ -787,7 +830,15 @@ function die(hit) {
 
   voteStatus.textContent = '';
 
-  if (typeof hit === 'object') {
+  if (typeof hit === 'object' && hit.word) {
+    // A FRIEND / HOLIDAY pillar: nothing to vote on.
+    crashed = null;
+    crashTitle.textContent = 'Boo! 👻';
+    crashSub.textContent = "You've already voted on everything.";
+    crashCard.classList.add('hidden');
+    voteRow.classList.add('hidden');
+    restartBtn.classList.remove('hidden');
+  } else if (typeof hit === 'object') {
     // Crashed into a pillar: vote it up or down.
     crashed = { country: hit.country.id, weekend: hit.weekend };
     crashTitle.textContent = 'Crashed!';
@@ -863,3 +914,4 @@ initUsername();
 initGame();
 startLoop();
 syncMyVotes();  // pick up this player's votes from the server
+if (document.fonts) document.fonts.load(`40px ${SPOOKY_FONT}`).catch(() => {});  // ready for the spooky pillars
