@@ -304,11 +304,16 @@ function initGame() {
 const comboKey = v => `${v.country}|${v.weekend}`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+const TOTAL_OPTIONS = COUNTRIES.length * WEEKENDS.length;
+const votedOnAll = () => myVotes.size >= TOTAL_OPTIONS;
+
 function renderMyVotes() {
   const ups = [...myVotes.values()].filter(d => d === 'up').length;
-  myVoteDisplay.textContent = myVotes.size
-    ? `You've voted on ${myVotes.size} of ${COUNTRIES.length * WEEKENDS.length} options (👍 ${ups} 👎 ${myVotes.size - ups})`
-    : '';
+  myVoteDisplay.textContent = votedOnAll()
+    ? `You've voted on all ${TOTAL_OPTIONS} options! 🎉 Nothing left to crash into.`
+    : myVotes.size
+      ? `You've voted on ${myVotes.size} of ${TOTAL_OPTIONS} options (👍 ${ups} 👎 ${myVotes.size - ups})`
+      : '';
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -341,24 +346,32 @@ showResultsBtn.addEventListener('click', showResults);
 closeResults.addEventListener('click', () => resultsPanel.classList.add('hidden'));
 
 // ── Pillar logic ──────────────────────────────────────────────────────────────
-// Every country + weekend combo, shuffled. Pillars are dealt from it two at a
-// time, so every combo turns up before any repeats, in a different random
-// order each game; it's reshuffled whenever it runs out.
+// Every country + weekend combo this player hasn't voted on yet, shuffled.
+// Pillars are dealt from it two at a time, so every remaining combo turns up
+// before any repeats, in a different random order each game; it's reshuffled
+// whenever it runs out. Once you've voted on an option it's out of your pool.
 let deck = [];
+
+const notVotedOn = c => !myVotes.has(comboKey({ country: c.country.id, weekend: c.weekend }));
 
 function shuffledDeck() {
   const d = [];
   for (const country of COUNTRIES) for (const weekend of WEEKENDS) d.push({ country, weekend });
-  for (let i = d.length - 1; i > 0; i--) {  // Fisher–Yates
+  const open = d.filter(notVotedOn);
+  for (let i = open.length - 1; i > 0; i--) {  // Fisher–Yates
     const j = Math.floor(Math.random() * (i + 1));
-    [d[i], d[j]] = [d[j], d[i]];
+    [open[i], open[j]] = [open[j], open[i]];
   }
-  return d;
+  return open;
 }
 
-// Two different combos for one gap's top and bottom pillars.
+// Combos for one gap's top and bottom pillars: two different ones, the same
+// one twice if it's the last left, or null once everything's been voted on.
 function dealPair() {
+  deck = deck.filter(notVotedOn);  // drop anything voted on since the shuffle
   if (deck.length < 2) deck = shuffledDeck();
+  if (deck.length === 0) return null;
+  if (deck.length === 1) return [deck[0], deck[0]];
   return [deck.pop(), deck.pop()];
 }
 
@@ -399,7 +412,9 @@ function spawnPipe() {
   const topH = Math.random() * (maxY - minY) + minY;
   const gapBottom = topH + CFG.pipeGap;
 
-  const [top, bottom] = dealPair();
+  const pair = dealPair();
+  if (!pair) return;  // nothing left to vote on: empty sky
+  const [top, bottom] = pair;
 
   pipes.push({
     x: CFG.width,
@@ -520,7 +535,8 @@ async function castVote(dir) {
     renderMyVotes();
     voteRow.classList.add('hidden');
     if (prev) voteStatus.textContent = `Switched to ${dir === 'up' ? 'an upvote 👍' : 'a downvote 👎'}`;
-    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} Crash into other pillars to vote on them too.`;
+    else if (votedOnAll()) voteStatus.textContent = `${dir === 'up' ? 'Upvoted!' : 'Downvoted!'} That's all ${TOTAL_OPTIONS} options done 🎉`;
+    else voteStatus.textContent = `${dir === 'up' ? 'Upvoted! 🎉' : 'Downvoted 👎'} It's out of your pool now. Crash into the others!`;
   } else {
     voteStatus.textContent = "Couldn't save your vote. Check your connection and try again.";
   }
