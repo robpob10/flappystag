@@ -48,7 +48,7 @@ app.get('/api/token', (req, res) => {
   res.json({ token: `${payload}.${sign(payload)}` });
 });
 
-// "country|weekend|up|username" -> count (mirrors the Redis hash)
+// "country|up|username" -> 1 (mirrors the Redis hash)
 function readTally() {
   if (!fs.existsSync(TALLY_FILE)) return {};
   try {
