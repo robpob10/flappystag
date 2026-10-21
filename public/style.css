@@ -111,7 +111,7 @@ body {
 
 .modal-box input:focus { border-color: #f5a623; }
 
-.modal-box button, .vote-btn, #restart-btn, #results-btn, #close-results {
+.modal-box button, #restart-btn, #results-btn, #close-results {
   background: #f5a623;
   border: none;
   border-radius: 10px;
@@ -122,15 +122,9 @@ body {
   color: #333;
 }
 
-.modal-box button:hover, .vote-btn:hover, #restart-btn:hover, #results-btn:hover, #close-results:hover {
+.modal-box button:hover, #restart-btn:hover, #results-btn:hover, #close-results:hover {
   background: #e09510;
 }
-
-#up-btn { background: #4caf50; color: #fff; }
-#up-btn:hover { background: #388e3c; }
-#down-btn { background: #e4312b; color: #fff; }
-#down-btn:hover { background: #b9221d; }
-.vote-btn:disabled { opacity: 0.6; cursor: default; }
 
 /* Overlay screens */
 #start-screen, #game-over-screen {
