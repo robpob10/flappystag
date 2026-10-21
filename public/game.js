@@ -156,7 +156,7 @@ localStorage.removeItem('holiday_vote');
 
 let bird, pipes, score, frame, gameState, animFrame;
 // gameState: 'waiting' | 'playing' | 'dead'
-let crashed = null;  // { country } of the pillar hit this round, if any
+let best = Number(localStorage.getItem('holiday_best')) || 0;  // this player's highest score
 
 // ── Canvas setup ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -188,9 +188,6 @@ const crashSub         = document.getElementById('crash-sub');
 const crashCard        = document.getElementById('crash-card');
 const crashCountry     = document.getElementById('crash-country');
 const voteStatus       = document.getElementById('vote-status');
-const voteRow          = document.getElementById('vote-row');
-const upBtn            = document.getElementById('up-btn');
-const downBtn          = document.getElementById('down-btn');
 const restartBtn       = document.getElementById('restart-btn');
 const resultsBtn       = document.getElementById('results-btn');
 const resultsPanel     = document.getElementById('results-panel');
@@ -252,7 +249,6 @@ function initGame() {
   pipes   = [];
   score   = 0;
   frame   = 0;
-  crashed = null;
   gameState = 'waiting';
 
   renderMyVotes();
@@ -291,12 +287,10 @@ document.addEventListener('keydown', e => {
 canvas.addEventListener('click',     flap);
 canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); }, { passive: false });
 
-upBtn.addEventListener('click', () => castVote('up'));
-downBtn.addEventListener('click', () => castVote('down'));
 restartBtn.addEventListener('click', () => { initGame(); startLoop(); });
 resultsBtn.addEventListener('click', showResults);
 showResultsBtn.addEventListener('click', showResults);
-// Back to whatever was underneath (e.g. a crash still waiting to be voted on).
+// Back to whatever was underneath (e.g. the crash screen).
 closeResults.addEventListener('click', () => resultsPanel.classList.add('hidden'));
 
 // ── Pillar logic ──────────────────────────────────────────────────────────────
@@ -483,24 +477,21 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
-// One vote per person per country, up or down; voting again switches it.
-// Voting acts as Try again: the next round starts straight away and the vote
-// saves in the background.
-function castVote(dir) {
-  if (!crashed) return;
-  if (!username) { usernameModal.classList.remove('hidden'); return; }
-  const vote = { ...crashed, dir };
-  const prev = myVotes.get(vote.country);
-  myVotes.set(vote.country, dir);
-  initGame();
-  startLoop();
-  submitVote(vote).then(ok => {
+// Crashing into a country upvotes it: one vote per person per country, so
+// crashing into it again changes nothing. Saves in the background.
+function upvote(country) {
+  if (!username) return;
+  const prev = myVotes.get(country);
+  myVotes.set(country, 'up');
+  submitVote({ country, dir: 'up' }).then(ok => {
     if (ok) return;
     // Didn't save (offline?): put the old vote back and say so.
-    if (prev) myVotes.set(vote.country, prev);
-    else myVotes.delete(vote.country);
+    if (prev) myVotes.set(country, prev);
+    else myVotes.delete(country);
     renderMyVotes();
-    myVoteDisplay.textContent = "Your last vote didn't save (no connection?).";
+    const msg = "Your upvote didn't save (no connection?).";
+    voteStatus.textContent = msg;
+    myVoteDisplay.textContent = msg;
   });
 }
 
@@ -558,9 +549,9 @@ function renderResults(votes) {
     const t = byVoter[name];
     const li = document.createElement('li');
     const who = document.createElement('span');
-    who.textContent = `${name} (${t.total})`;
+    who.textContent = name;
     const what = document.createElement('span');
-    what.textContent = `👍 ${t.up}  👎 ${t.down}`;
+    what.textContent = `👍 ${t.up}`;
     li.append(who, what);
     if (name === username) li.classList.add('me');
     return li;
@@ -692,6 +683,13 @@ function drawScore() {
   ctx.textAlign = 'center';
   ctx.strokeText(score, CFG.width / 2, 60);
   ctx.fillText(score, CFG.width / 2, 60);
+
+  // highest score underneath (counting this round's as it goes)
+  const bestText = `Best: ${Math.max(best, score)}`;
+  ctx.lineWidth = 3;
+  ctx.font = 'bold 18px Arial';
+  ctx.strokeText(bestText, CFG.width / 2, 88);
+  ctx.fillText(bestText, CFG.width / 2, 88);
 }
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
@@ -731,32 +729,26 @@ function die(hit) {
   cancelAnimationFrame(animFrame);
   playSound('die');
 
-  voteStatus.textContent = '';
+  if (score > best) {
+    best = score;
+    localStorage.setItem('holiday_best', String(best));
+  }
 
   if (typeof hit === 'object') {
-    // Crashed into a pillar: vote it up or down.
-    crashed = { country: hit.country.id };
+    // Crashed into a pillar: that's an upvote for it.
     crashTitle.textContent = 'Crashed!';
     crashSub.textContent = 'You flew straight into';
     crashCountry.textContent = countryLabel(hit.country.id);
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    // Voting is the only way on (no Try again). If you've already voted on
-    // this country, offer to keep or switch it.
-    const mine = myVotes.get(crashed.country);
-    upBtn.textContent = mine === 'up' ? '👍 Keep upvote' : mine ? '👍 Switch to upvote' : '👍 Upvote';
-    downBtn.textContent = mine === 'down' ? '👎 Keep downvote' : mine ? '👎 Switch to downvote' : '👎 Downvote';
-    voteRow.classList.remove('hidden');
-    restartBtn.classList.add('hidden');
-    if (mine) voteStatus.textContent = `You've already ${mine === 'up' ? 'upvoted' : 'downvoted'} this one. Keep it or switch?`;
+    voteStatus.textContent = username ? '👍 Upvoted!' : '';
+    upvote(hit.country.id);
   } else {
-    crashed = null;
     crashTitle.textContent = 'Fuck you';
     crashSub.textContent = '';
     crashCard.classList.add('hidden');
-    voteRow.classList.add('hidden');
-    restartBtn.classList.remove('hidden');
+    voteStatus.textContent = '';
   }
 
   gameOverScreen.classList.remove('hidden');
