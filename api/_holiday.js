@@ -3,9 +3,8 @@
 // and labels).
 const COUNTRIES = ['france', 'tunisia', 'morocco'];
 
-// Each person gets one vote per country, up or down; voting again switches it.
-// Votes live in a hash: "country|up|username" -> 1, and casting one removes
-// that person's opposite field for the country.
+// Every crash is another vote, as many as you like. Counts live in a hash:
+// "country|up|username" -> number of votes.
 // (A fresh key: all results were reset to 0 on 21 Oct 2026.)
 const TALLY_KEY = 'holiday:tally3';
 const DIRS = ['up', 'down'];
@@ -30,8 +29,6 @@ function tallyField({ country, dir, username }) {
   return `${country}|${dir}|${username}`;
 }
 
-const opposite = dir => (dir === 'up' ? 'down' : 'up');
-
 const isOption = v => v && typeof v.username === 'string' && COUNTRIES.includes(v.country);
 
 // One row per person per country, { username, country, up, down }, dropping
@@ -48,7 +45,7 @@ function toVoteList(tally) {
     const [country, dir, ...rest] = String(field).split('|');
     const v = { country, username: rest.join('|') };
     const count = Number(n);
-    if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] = 1;  // one vote each
+    if (isOption(v) && DIRS.includes(dir) && count > 0) row(v)[dir] += count;
   }
 
   return [...rows.values()];
@@ -56,5 +53,5 @@ function toVoteList(tally) {
 
 module.exports = {
   COUNTRIES, TALLY_KEY, LEGACY_KEYS,
-  parseVote, tallyField, opposite, toVoteList,
+  parseVote, tallyField, toVoteList,
 };
