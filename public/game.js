@@ -23,58 +23,21 @@ const ASSETS = {
 };
 
 // ── Holiday ballot ────────────────────────────────────────────────────────────
-// Every pillar is one of these countries (outlines in shapes.js) with a random
-// weekend attached; the bird votes by crashing into one. Ids must match
-// api/_holiday.js.
+// Every pillar is one of these countries (outlines in shapes.js); the bird
+// votes by crashing into one. Ids must match api/_holiday.js.
 const COUNTRIES = [
+  { id: 'france',  name: 'France',  flag: '🇫🇷', fill: '#0055a4', edge: '#002d5a', ink: '#fff' },
   { id: 'tunisia', name: 'Tunisia', flag: '🇹🇳', fill: '#e4312b', edge: '#8f1712', ink: '#fff' },
   { id: 'morocco', name: 'Morocco', flag: '🇲🇦', fill: '#1f8a4c', edge: '#0f5130', ink: '#fff' },
 ];
 const COUNTRY_BY_ID = Object.fromEntries(COUNTRIES.map(c => [c.id, c]));
 
-// Long weekends (Fri–Mon) in March and April 2027, keyed by the Saturday.
-// 12–15 Mar is out: the organiser can't make it.
-const WEEKENDS = [
-  '2027-03-06', '2027-03-20', '2027-03-27',
-  '2027-04-03', '2027-04-10', '2027-04-17', '2027-04-24',
-];
-const EASTER_WEEKEND = '2027-03-27';  // Good Friday 26 March to Easter Monday 29 March
-
-const MONTHS      = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
-                     'August', 'September', 'October', 'November', 'December'];
-
-// [Friday, Monday] around the Saturday id.
-function weekendDays(id) {
-  const sat = new Date(`${id}T00:00:00Z`).getTime();
-  return [new Date(sat - 86400000), new Date(sat + 2 * 86400000)];
+function countryLabel(id) {
+  const c = COUNTRY_BY_ID[id];
+  return `${c.flag} ${c.name}`;
 }
 
-// "5–8 Mar" (or "30 Apr – 3 May" across a month end)
-function weekendLabel(id) {
-  const [fri, mon] = weekendDays(id);
-  const fm = MONTHS[fri.getUTCMonth()], mm = MONTHS[mon.getUTCMonth()];
-  return fm === mm
-    ? `${fri.getUTCDate()}–${mon.getUTCDate()} ${mm}`
-    : `${fri.getUTCDate()} ${fm} – ${mon.getUTCDate()} ${mm}`;
-}
-
-// "Fri 26 – Mon 29 March 2027 (Easter)"
-function weekendLongLabel(id) {
-  const [fri, mon] = weekendDays(id);
-  const friPart = fri.getUTCMonth() === mon.getUTCMonth()
-    ? `Fri ${fri.getUTCDate()}`
-    : `Fri ${fri.getUTCDate()} ${MONTHS_LONG[fri.getUTCMonth()]}`;
-  const easter = id === EASTER_WEEKEND ? ' (Easter)' : '';
-  return `${friPart} – Mon ${mon.getUTCDate()} ${MONTHS_LONG[mon.getUTCMonth()]} ${mon.getUTCFullYear()}${easter}`;
-}
-
-function voteLabel(v) {
-  const c = COUNTRY_BY_ID[v.country];
-  return `${c.flag} ${c.name} · ${weekendLabel(v.weekend)}`;
-}
-
-// Area centroid of each outline (normalised units): where the date label and
+// Area centroid of each outline (normalised units): where the name label and
 // stem go, since it's reliably inside the shape.
 for (const shape of Object.values(COUNTRY_SHAPES)) {
   const p = shape.pts;
@@ -185,7 +148,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVotes = new Map();  // "country|weekend" -> 'up' | 'down': this player's vote on each option
+let myVotes = new Map();  // country id -> 'up' | 'down': this player's vote on each country
 // Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
@@ -193,7 +156,7 @@ localStorage.removeItem('holiday_vote');
 
 let bird, pipes, score, frame, gameState, animFrame;
 // gameState: 'waiting' | 'playing' | 'dead'
-let crashed = null;  // { country, weekend } of the pillar hit this round, if any
+let crashed = null;  // { country } of the pillar hit this round, if any
 
 // ── Canvas setup ──────────────────────────────────────────────────────────────
 const canvas = document.getElementById('game-canvas');
@@ -224,7 +187,6 @@ const crashTitle       = document.getElementById('crash-title');
 const crashSub         = document.getElementById('crash-sub');
 const crashCard        = document.getElementById('crash-card');
 const crashCountry     = document.getElementById('crash-country');
-const crashWeekend     = document.getElementById('crash-weekend');
 const voteStatus       = document.getElementById('vote-status');
 const voteRow          = document.getElementById('vote-row');
 const upBtn            = document.getElementById('up-btn');
@@ -234,7 +196,6 @@ const resultsBtn       = document.getElementById('results-btn');
 const resultsPanel     = document.getElementById('results-panel');
 const resultsLeader    = document.getElementById('results-leader');
 const resultsCountries = document.getElementById('results-countries');
-const resultsWeekends  = document.getElementById('results-weekends');
 const resultsVoters    = document.getElementById('results-voters');
 const closeResults     = document.getElementById('close-results');
 const showResultsBtn   = document.getElementById('show-results-btn');
@@ -292,7 +253,6 @@ function initGame() {
   score   = 0;
   frame   = 0;
   crashed = null;
-  deck    = shuffledDeck();
   gameState = 'waiting';
 
   renderMyVotes();
@@ -301,19 +261,13 @@ function initGame() {
   resultsPanel.classList.add('hidden');
 }
 
-const comboKey = v => `${v.country}|${v.weekend}`;
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-const TOTAL_OPTIONS = COUNTRIES.length * WEEKENDS.length;
-const votedOnAll = () => myVotes.size >= TOTAL_OPTIONS;
-
+// "Your votes: 🇫🇷 👍  🇲🇦 👎"
 function renderMyVotes() {
-  const ups = [...myVotes.values()].filter(d => d === 'up').length;
-  myVoteDisplay.textContent = votedOnAll()
-    ? `You've voted on all ${TOTAL_OPTIONS} options! 🎉 Nothing left but friends and holidays 👻`
-    : myVotes.size
-      ? `You've voted on ${myVotes.size} of ${TOTAL_OPTIONS} options (👍 ${ups} 👎 ${myVotes.size - ups})`
-      : '';
+  const mine = COUNTRIES.filter(c => myVotes.has(c.id))
+    .map(c => `${c.flag} ${myVotes.get(c.id) === 'up' ? '👍' : '👎'}`);
+  myVoteDisplay.textContent = mine.length ? `Your votes: ${mine.join('  ')}` : '';
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -346,41 +300,19 @@ showResultsBtn.addEventListener('click', showResults);
 closeResults.addEventListener('click', () => resultsPanel.classList.add('hidden'));
 
 // ── Pillar logic ──────────────────────────────────────────────────────────────
-// Every country + weekend combo this player hasn't voted on yet, shuffled.
-// Pillars are dealt from it two at a time, so every remaining combo turns up
-// before any repeats, in a different random order each game; it's reshuffled
-// whenever it runs out. Once you've voted on an option it's out of your pool.
-let deck = [];
-
-const notVotedOn = c => !myVotes.has(comboKey({ country: c.country.id, weekend: c.weekend }));
-
-function shuffledDeck() {
-  const d = [];
-  for (const country of COUNTRIES) for (const weekend of WEEKENDS) d.push({ country, weekend });
-  const open = d.filter(notVotedOn);
-  for (let i = open.length - 1; i > 0; i--) {  // Fisher–Yates
-    const j = Math.floor(Math.random() * (i + 1));
-    [open[i], open[j]] = [open[j], open[i]];
-  }
-  return open;
-}
-
-// Combos for one gap's top and bottom pillars: two different ones, the same
-// one twice if it's the last left, or null once everything's been voted on
-// (then the pillars are FRIEND / HOLIDAY).
+// Countries for one gap's top and bottom pillars: two different ones, picked
+// at random. Every country stays in play however you've voted.
 function dealPair() {
-  deck = deck.filter(notVotedOn);  // drop anything voted on since the shuffle
-  if (deck.length < 2) deck = shuffledDeck();
-  if (deck.length === 0) return null;
-  if (deck.length === 1) return [deck[0], deck[0]];
-  return [deck.pop(), deck.pop()];
+  const i = Math.floor(Math.random() * COUNTRIES.length);
+  const j = (i + 1 + Math.floor(Math.random() * (COUNTRIES.length - 1))) % COUNTRIES.length;
+  return [COUNTRIES[i], COUNTRIES[j]];
 }
 
 // Lays out one pillar in its column's local coordinates (x from the column's
 // left edge). The country keeps its proportions, is centred in the column and
 // hugs the gap; if it's shorter than its section, a stem in the same colour
 // joins it to the screen edge.
-function makePillar(country, weekend, isTop, sectionY, sectionH) {
+function makePillar(country, isTop, sectionY, sectionH) {
   const shape = COUNTRY_SHAPES[country.id];
   const h  = Math.min(sectionH, CFG.pillarW / shape.aspect);
   const w  = h * shape.aspect;
@@ -403,30 +335,8 @@ function makePillar(country, weekend, isTop, sectionY, sectionH) {
       : { x: sx, y: cy, w: CFG.stemW, h: sectionY + sectionH - cy };
   }
 
-  return { country, weekend, label: weekendLabel(weekend), pts, path, stem, cx, cy };
-}
-
-// Once you've voted on everything, the pillars are just the words FRIEND (top)
-// and HOLIDAY (bottom), written down the pillar in a dripping Halloween font.
-// They're obstacles only: crashing into one isn't a vote.
-const SPOOKY_FONT = 'Creepster, Impact, fantasy';
-const SPOOKY_MAX_SIZE = 120;  // px; in practice the section's length decides
-
-function makeWordPillar(word, isTop, sectionY, sectionH) {
-  ctx.font = `100px ${SPOOKY_FONT}`;
-  const per100 = ctx.measureText(word).width;
-  const size = Math.min(SPOOKY_MAX_SIZE, ((sectionH - 6) * 100) / per100);
-  const len   = (per100 * size) / 100;  // along the pillar: the text runs top to bottom
-  const thick = size * 0.8;             // across it
-  const x0 = (CFG.pillarW - thick) / 2;
-  const y0 = isTop ? sectionY + sectionH - len : sectionY;  // hug the gap
-  return {
-    word, size,
-    pts: [x0, y0, x0 + thick, y0, x0 + thick, y0 + len, x0, y0 + len],  // hitbox
-    stem: null,
-    cx: CFG.pillarW / 2,
-    cy: y0 + len / 2,
-  };
+  // The section is kept so the rig can redraw the pillar as another country.
+  return { country, isTop, sectionY, sectionH, pts, path, stem, cx, cy };
 }
 
 function spawnPipe() {
@@ -436,16 +346,14 @@ function spawnPipe() {
   const topH = Math.random() * (maxY - minY) + minY;
   const gapBottom = topH + CFG.pipeGap;
 
-  const pair = dealPair();
+  const [top, bottom] = dealPair();
   const botH = groundTop - gapBottom;
 
   pipes.push({
     x: CFG.width,
     scored: false,
-    top:    pair ? makePillar(pair[0].country, pair[0].weekend, true, 0, topH)
-                 : makeWordPillar('FRIEND', true, 0, topH),
-    bottom: pair ? makePillar(pair[1].country, pair[1].weekend, false, gapBottom, botH)
-                 : makeWordPillar('HOLIDAY', false, gapBottom, botH),
+    top:    makePillar(top, true, 0, topH),
+    bottom: makePillar(bottom, false, gapBottom, botH),
   });
 }
 
@@ -500,6 +408,36 @@ function checkCollision() {
   return null;
 }
 
+// ── The rig ───────────────────────────────────────────────────────────────────
+// Nobody crashes into Tunisia or Morocco: when the bird is about to hit one,
+// it turns into France at the last second. Runs every frame just before the
+// real collision check, and the look-ahead starts from where the bird is now,
+// so even a hit it didn't see coming (a flap straight into one) is France by
+// the time it counts.
+const RIGGED_FOR = COUNTRY_BY_ID.france;
+const RIG_LOOKAHEAD = 12;  // frames of free fall to look ahead (0.2 s)
+
+function rigPillars() {
+  const cx = bird.x + CFG.birdW / 2;
+  const r  = CFG.birdRadius;
+  let y = bird.y, vy = bird.vy;
+  for (let f = 0; f <= RIG_LOOKAHEAD; f++) {
+    const cy = y + CFG.birdH / 2;
+    for (const p of pipes) {
+      const lx = cx - (p.x - f * CFG.pipeSpeed);  // where the bird will be in this column
+      if (lx + r < 0 || lx - r > CFG.pillarW) continue;
+      for (const side of ['top', 'bottom']) {
+        const pl = p[side];
+        if (pl.country !== RIGGED_FOR && hitsPillar(lx, cy, r, pl)) {
+          p[side] = makePillar(RIGGED_FOR, pl.isTop, pl.sectionY, pl.sectionH);
+        }
+      }
+    }
+    vy += CFG.gravity;
+    y  += vy;
+  }
+}
+
 // ── Votes ─────────────────────────────────────────────────────────────────────
 async function submitVote(vote) {
   try {
@@ -512,7 +450,7 @@ async function submitVote(vote) {
     const res = await fetch('/api/vote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-vote-token': token },
-      body: JSON.stringify({ username, country: vote.country, weekend: vote.weekend, dir: vote.dir }),
+      body: JSON.stringify({ username, country: vote.country, dir: vote.dir }),
     });
     return res.ok;
   } catch {
@@ -534,7 +472,7 @@ function countMyVotes(votes) {
   if (!username) return;
   myVotes = new Map();
   for (const v of votes) {
-    if (v.username === username) myVotes.set(comboKey(v), v.up ? 'up' : 'down');
+    if (v.username === username) myVotes.set(v.country, v.up ? 'up' : 'down');
   }
   renderMyVotes();
 }
@@ -545,25 +483,24 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
-// One vote per person per option, up or down; voting again switches it.
+// One vote per person per country, up or down; voting again switches it.
 // Voting acts as Try again: the next round starts straight away and the vote
 // saves in the background.
 function castVote(dir) {
   if (!crashed) return;
   if (!username) { usernameModal.classList.remove('hidden'); return; }
   const vote = { ...crashed, dir };
-  const key = comboKey(vote);
-  const prev = myVotes.get(key);
-  myVotes.set(key, dir);  // out of the pool for the round that's starting
+  const prev = myVotes.get(vote.country);
+  myVotes.set(vote.country, dir);
   initGame();
   startLoop();
   submitVote(vote).then(ok => {
     if (ok) return;
-    // Didn't save (offline?): put the option back and say so.
-    if (prev) myVotes.set(key, prev);
-    else myVotes.delete(key);
+    // Didn't save (offline?): put the old vote back and say so.
+    if (prev) myVotes.set(vote.country, prev);
+    else myVotes.delete(vote.country);
     renderMyVotes();
-    myVoteDisplay.textContent = "Your last vote didn't save (no connection?). That option will come up again.";
+    myVoteDisplay.textContent = "Your last vote didn't save (no connection?).";
   });
 }
 
@@ -587,40 +524,26 @@ function barRow(label, net, maxAbs) {
 }
 
 function renderResults(votes) {
-  // Each row is one person's up and down votes on one trip. Totals are net
-  // (ups minus downs) for the trip, the country and the weekend.
-  const byCountry = {}, byWeekend = {}, byCombo = {};
-  for (const v of votes) {
-    const net = v.up - v.down;
-    byCountry[v.country] = (byCountry[v.country] || 0) + net;
-    byWeekend[v.weekend] = (byWeekend[v.weekend] || 0) + net;
-    const key = comboKey(v);
-    byCombo[key] = (byCombo[key] || 0) + net;
-  }
+  // Each row is one person's up or down vote on one country. Totals are net
+  // (ups minus downs) per country.
+  const byCountry = {};
+  for (const v of votes) byCountry[v.country] = (byCountry[v.country] || 0) + v.up - v.down;
 
   if (!votes.length) {
     resultsLeader.textContent = 'No votes yet. Go crash into somewhere!';
   } else {
-    const top = Math.max(...Object.values(byCombo));
-    const leaders = Object.keys(byCombo).filter(k => byCombo[k] === top).map(k => {
-      const [country, weekend] = k.split('|');
-      return voteLabel({ country, weekend });
-    });
+    const top = Math.max(...Object.values(byCountry));
+    const leaders = Object.keys(byCountry).filter(k => byCountry[k] === top);
     const total = votes.reduce((n, v) => n + v.up + v.down, 0);
     const people = new Set(votes.map(v => v.username)).size;
     resultsLeader.textContent = top > 0 && leaders.length === 1
-      ? `Leading: ${leaders[0]} (+${top})`
+      ? `Leading: ${countryLabel(leaders[0])} (+${top})`
       : `${plural(total, 'vote')} from ${people} ${people === 1 ? 'person' : 'people'}. No single favourite yet.`;
   }
 
-  const maxAbs = obj => Math.max(0, ...Object.values(obj).map(Math.abs));
-  const maxC = maxAbs(byCountry);
+  const maxC = Math.max(0, ...Object.values(byCountry).map(Math.abs));
   resultsCountries.replaceChildren(...COUNTRIES.map(c =>
-    barRow(`${c.flag} ${c.name}`, byCountry[c.id] || 0, maxC)));
-
-  const maxW = maxAbs(byWeekend);
-  resultsWeekends.replaceChildren(...WEEKENDS.map(w =>
-    barRow(weekendLabel(w) + (w === EASTER_WEEKEND ? ' 🐣' : ''), byWeekend[w] || 0, maxW)));
+    barRow(countryLabel(c.id), byCountry[c.id] || 0, maxC)));
 
   // Each person's ups and downs.
   const byVoter = {};
@@ -653,7 +576,6 @@ async function showResults() {
   resultsPanel.classList.remove('hidden');
   resultsLeader.textContent = 'Loading…';
   resultsCountries.replaceChildren();
-  resultsWeekends.replaceChildren();
   resultsVoters.replaceChildren();
   const votes = await fetchVotes();
   if (!votes) {
@@ -682,25 +604,7 @@ function drawGround() {
   ctx.fillRect(0, CFG.height - CFG.groundHeight, CFG.width, 14);
 }
 
-function drawWordPillar(pl) {
-  ctx.save();
-  ctx.translate(pl.cx, pl.cy);
-  ctx.rotate(Math.PI / 2);  // reads top to bottom
-  ctx.font = `${pl.size}px ${SPOOKY_FONT}`;
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(3, pl.size / 9);
-  ctx.strokeStyle = '#2a0a3a';
-  ctx.shadowColor = 'rgba(120, 255, 80, 0.9)';  // ghostly green glow
-  ctx.shadowBlur = 14;
-  ctx.strokeText(pl.word, 0, 0);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ff7518';  // pumpkin
-  ctx.fillText(pl.word, 0, 0);
-  ctx.restore();
-}
-
 function drawPillar(pl) {
-  if (pl.word) return drawWordPillar(pl);
   ctx.fillStyle   = pl.country.fill;
   ctx.strokeStyle = pl.country.edge;
   ctx.lineWidth   = 3;
@@ -713,16 +617,14 @@ function drawPillar(pl) {
   ctx.fill(pl.path);
   ctx.stroke(pl.path);
 
-  // country + weekend label at the centroid
+  // country name at the centroid
+  const name = pl.country.name.toUpperCase();
   ctx.fillStyle   = '#fff';
   ctx.strokeStyle = 'rgba(0,0,0,0.8)';
   ctx.lineWidth   = 3;
-  ctx.font = 'bold 10px Arial';
-  ctx.strokeText(pl.country.name.toUpperCase(), pl.cx, pl.cy - 9);
-  ctx.fillText(pl.country.name.toUpperCase(), pl.cx, pl.cy - 9);
-  ctx.font = 'bold 15px Arial';
-  ctx.strokeText(pl.label, pl.cx, pl.cy + 7);
-  ctx.fillText(pl.label, pl.cx, pl.cy + 7);
+  ctx.font = 'bold 14px Arial';
+  ctx.strokeText(name, pl.cx, pl.cy);
+  ctx.fillText(name, pl.cx, pl.cy);
 }
 
 function drawPipe(p) {
@@ -819,6 +721,7 @@ function update() {
   // remove off-screen pipes
   pipes = pipes.filter(p => p.x + CFG.pillarW > -10);
 
+  rigPillars();
   const hit = checkCollision();
   if (hit) die(hit);
 }
@@ -830,27 +733,18 @@ function die(hit) {
 
   voteStatus.textContent = '';
 
-  if (typeof hit === 'object' && hit.word) {
-    // A FRIEND / HOLIDAY pillar: nothing to vote on.
-    crashed = null;
-    crashTitle.textContent = 'Boo! 👻';
-    crashSub.textContent = "You've already voted on everything.";
-    crashCard.classList.add('hidden');
-    voteRow.classList.add('hidden');
-    restartBtn.classList.remove('hidden');
-  } else if (typeof hit === 'object') {
+  if (typeof hit === 'object') {
     // Crashed into a pillar: vote it up or down.
-    crashed = { country: hit.country.id, weekend: hit.weekend };
+    crashed = { country: hit.country.id };
     crashTitle.textContent = 'Crashed!';
     crashSub.textContent = 'You flew straight into';
-    crashCountry.textContent = `${hit.country.flag} ${hit.country.name}`;
-    crashWeekend.textContent = weekendLongLabel(hit.weekend);
+    crashCountry.textContent = countryLabel(hit.country.id);
     crashCard.style.background = hit.country.fill;
     crashCard.style.color = hit.country.ink;
     crashCard.classList.remove('hidden');
-    // Voting is the only way on (no Try again). Voted options are normally out
-    // of your pool, but if one slips through, offer to keep or switch it.
-    const mine = myVotes.get(comboKey(crashed));
+    // Voting is the only way on (no Try again). If you've already voted on
+    // this country, offer to keep or switch it.
+    const mine = myVotes.get(crashed.country);
     upBtn.textContent = mine === 'up' ? '👍 Keep upvote' : mine ? '👍 Switch to upvote' : '👍 Upvote';
     downBtn.textContent = mine === 'down' ? '👎 Keep downvote' : mine ? '👎 Switch to downvote' : '👎 Downvote';
     voteRow.classList.remove('hidden');
@@ -914,4 +808,3 @@ initUsername();
 initGame();
 startLoop();
 syncMyVotes();  // pick up this player's votes from the server
-if (document.fonts) document.fonts.load(`40px ${SPOOKY_FONT}`).catch(() => {});  // ready for the spooky pillars

@@ -1,9 +1,24 @@
 // Country outlines for the pillars, generated from Natural Earth 1:50m data
 // (world-atlas). Each is the mainland simplified to a few dozen points, with
 // x/y normalised to 0..1 across its bounding box (north up); aspect is the
-// box width / height after correcting longitude for latitude. Morocco is
-// clipped at its internationally recognised southern border (27°40′N).
+// box width / height after correcting longitude for latitude. France is the
+// European mainland (no Corsica or overseas territories). Morocco is clipped
+// at its internationally recognised southern border (27°40′N).
 const COUNTRY_SHAPES = {
+  france: {
+    aspect: 1.01,
+    pts: [
+      0.959, 0.4, 0.909, 0.416, 0.832, 0.557, 0.894, 0.535, 0.913, 0.59, 0.895, 0.612, 0.924, 0.65, 0.883, 0.688,
+      0.911, 0.716, 0.904, 0.772, 0.961, 0.792, 0.95, 0.837, 0.843, 0.916, 0.761, 0.874, 0.672, 0.86, 0.605, 0.934,
+      0.618, 0.99, 0.527, 0.998, 0.428, 0.943, 0.418, 0.96, 0.366, 0.96, 0.254, 0.917, 0.26, 0.897, 0.23, 0.878,
+      0.254, 0.86, 0.285, 0.732, 0.285, 0.635, 0.326, 0.696, 0.276, 0.615, 0.28, 0.546, 0.209, 0.489, 0.199, 0.449,
+      0.234, 0.443, 0.175, 0.432, 0.181, 0.414, 0.153, 0.396, 0.035, 0.374, 0.006, 0.349, 0.033, 0.334, 0.014, 0.321,
+      0.04, 0.319, 0, 0.302, 0.119, 0.258, 0.16, 0.292, 0.262, 0.279, 0.225, 0.161, 0.271, 0.162, 0.281, 0.195,
+      0.356, 0.206, 0.401, 0.188, 0.379, 0.181, 0.383, 0.159, 0.492, 0.096, 0.499, 0.024, 0.565, 0, 0.583, 0.039,
+      0.61, 0.036, 0.655, 0.09, 0.693, 0.097, 0.691, 0.128, 0.742, 0.108, 0.746, 0.149, 0.796, 0.181, 0.853, 0.183,
+      0.891, 0.221, 0.999, 0.242, 0.959, 0.336,
+    ],
+  },
   tunisia: {
     aspect: 0.472,
     pts: [
