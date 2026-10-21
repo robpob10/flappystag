@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Redis } = require('@upstash/redis');
-const { TALLY_KEY, parseVote, tallyField, opposite } = require('./_holiday');
+const { TALLY_KEY, parseVote, tallyField } = require('./_holiday');
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -51,11 +51,8 @@ module.exports = async function handler(req, res) {
   if (!vote) return res.status(400).json({ error: 'Invalid vote' });
 
   try {
-    // One vote per person per option: set this one, drop the opposite, together.
-    await redis.multi()
-      .hset(TALLY_KEY, { [tallyField(vote)]: 1 })
-      .hdel(TALLY_KEY, tallyField({ ...vote, dir: opposite(vote.dir) }))
-      .exec();
+    // Every crash is another vote: add one to this person's count.
+    await redis.hincrby(TALLY_KEY, tallyField(vote), 1);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

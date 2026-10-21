@@ -148,7 +148,7 @@ function playSound(name) {
 // ── State ─────────────────────────────────────────────────────────────────────
 let username = localStorage.getItem('flappy_username') || '';
 let muted = localStorage.getItem('flappy_muted') === '1';
-let myVotes = new Map();  // country id -> 'up' | 'down': this player's vote on each country
+let myVotes = new Map();  // country id -> how many times this player has upvoted it
 // Keys from earlier versions (Flappy Stag high scores, single-vote cache).
 localStorage.removeItem('flappy_best');
 localStorage.removeItem('flappy_best_synced');
@@ -259,11 +259,11 @@ function initGame() {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// "Your votes: 🇫🇷 👍  🇲🇦 👎"
+// "Your upvotes: 🇫🇷 12  🇲🇦 1"
 function renderMyVotes() {
-  const mine = COUNTRIES.filter(c => myVotes.has(c.id))
-    .map(c => `${c.flag} ${myVotes.get(c.id) === 'up' ? '👍' : '👎'}`);
-  myVoteDisplay.textContent = mine.length ? `Your votes: ${mine.join('  ')}` : '';
+  const mine = COUNTRIES.filter(c => myVotes.get(c.id) > 0)
+    .map(c => `${c.flag} ${myVotes.get(c.id)}`);
+  myVoteDisplay.textContent = mine.length ? `Your upvotes: ${mine.join('  ')}` : '';
 }
 
 // ── Input ─────────────────────────────────────────────────────────────────────
@@ -466,7 +466,7 @@ function countMyVotes(votes) {
   if (!username) return;
   myVotes = new Map();
   for (const v of votes) {
-    if (v.username === username) myVotes.set(v.country, v.up ? 'up' : 'down');
+    if (v.username === username) myVotes.set(v.country, v.up);
   }
   renderMyVotes();
 }
@@ -477,17 +477,15 @@ async function syncMyVotes() {
   if (votes) countMyVotes(votes);
 }
 
-// Crashing into a country upvotes it: one vote per person per country, so
-// crashing into it again changes nothing. Saves in the background.
+// Crashing into a country upvotes it, every time: votes are unlimited. Saves
+// in the background.
 function upvote(country) {
   if (!username) return;
-  const prev = myVotes.get(country);
-  myVotes.set(country, 'up');
+  myVotes.set(country, (myVotes.get(country) || 0) + 1);
   submitVote({ country, dir: 'up' }).then(ok => {
     if (ok) return;
-    // Didn't save (offline?): put the old vote back and say so.
-    if (prev) myVotes.set(country, prev);
-    else myVotes.delete(country);
+    // Didn't save (offline?): take it back off and say so.
+    myVotes.set(country, myVotes.get(country) - 1);
     renderMyVotes();
     const msg = "Your upvote didn't save (no connection?).";
     voteStatus.textContent = msg;
